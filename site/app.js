@@ -87,8 +87,8 @@ const state = {
   travelSettingsDefaults: null,
   dynamicAdjacency: null,
   routeStationIndex: null,
-  routeOption: [],
-  routeOptionResult: null,
+  routeOptions: [[]],
+  activeRouteOptionIndex: 0,
   dirty: true,
 };
 
@@ -144,18 +144,16 @@ const probeRouteTableBody = document.getElementById("probeRouteTableBody");
 const mobileProbeRoutePanel = document.getElementById("mobileProbeRoutePanel");
 const mobileProbeRouteMeta = document.getElementById("mobileProbeRouteMeta");
 const mobileProbeRouteTableBody = document.getElementById("mobileProbeRouteTableBody");
-const routeOptionPanel = document.getElementById("routeOptionPanel");
-const routeOptionSequence = document.getElementById("routeOptionSequence");
-const routeOptionInput = document.getElementById("routeOptionInput");
-const routeOptionAddBtn = document.getElementById("routeOptionAddBtn");
-const routeOptionClearBtn = document.getElementById("routeOptionClearBtn");
-const routeOptionResult = document.getElementById("routeOptionResult");
-const mobileRouteOptionPanel = document.getElementById("mobileRouteOptionPanel");
-const mobileRouteOptionSequence = document.getElementById("mobileRouteOptionSequence");
-const mobileRouteOptionInput = document.getElementById("mobileRouteOptionInput");
-const mobileRouteOptionAddBtn = document.getElementById("mobileRouteOptionAddBtn");
-const mobileRouteOptionClearBtn = document.getElementById("mobileRouteOptionClearBtn");
-const mobileRouteOptionResult = document.getElementById("mobileRouteOptionResult");
+const routeBuilderPanel = document.getElementById("routeBuilderPanel");
+const routeComparisons = document.getElementById("routeComparisons");
+const routePalette = document.getElementById("routePalette");
+const addComparisonBtn = document.getElementById("addComparisonBtn");
+const undoRouteBtn = document.getElementById("undoRouteBtn");
+const mobileRouteBuilderPanel = document.getElementById("mobileRouteBuilderPanel");
+const mobileRouteComparisons = document.getElementById("mobileRouteComparisons");
+const mobileRoutePalette = document.getElementById("mobileRoutePalette");
+const mobileAddComparisonBtn = document.getElementById("mobileAddComparisonBtn");
+const mobileUndoRouteBtn = document.getElementById("mobileUndoRouteBtn");
 const mobileWarpToggle = document.getElementById("mobileWarpToggle");
 const mobileHeatmapToggle = document.getElementById("mobileHeatmapToggle");
 const mobileOutlineToggle = document.getElementById("mobileOutlineToggle");
@@ -1693,74 +1691,119 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
   return { viable: true, steps, totalMinutes: bestTotal };
 }
 
-function syncRouteOptionPanel() {
-  const panels = [
-    { panel: routeOptionPanel, sequence: routeOptionSequence, result: routeOptionResult },
-    { panel: mobileRouteOptionPanel, sequence: mobileRouteOptionSequence, result: mobileRouteOptionResult },
-  ].filter(({ panel }) => panel);
-
-  for (const { sequence, result } of panels) {
-    if (sequence) {
-      if (state.routeOption.length === 0) {
-        sequence.innerHTML = '<span class="route-option-placeholder">No routes added yet</span>';
-      } else {
-        sequence.innerHTML = state.routeOption
-          .map((id, i) =>
-            (i > 0 ? '<span class="route-option-arrow" aria-hidden="true">→</span>' : "") +
-            renderRouteBadge(id),
-          )
-          .join("");
-      }
+function renderComparisonResult(seq) {
+  if (!state.originPoint || !state.probePoint || seq.length === 0) return "";
+  const ev = evaluateRouteOption(state.originPoint, state.probePoint, seq);
+  if (!ev.viable) {
+    return `<p class="route-comparison-unviable">${escapeHtml(ev.reason)}</p>`;
+  }
+  const stepsHtml = ev.steps.map((step) => {
+    if (step.kind === "walk") {
+      return `<li class="route-comparison-step route-comparison-step-walk">Walk ${formatMinutes(step.minutes)} · <strong>${escapeHtml(step.stationName)}</strong></li>`;
     }
-
-    if (!result) continue;
-
-    if (!state.originPoint || !state.probePoint || state.routeOption.length === 0) {
-      result.hidden = true;
-      continue;
+    if (step.kind === "ride") {
+      return `<li class="route-comparison-step route-comparison-step-ride">${renderRouteBadge(step.routeId)} ${escapeHtml(step.from)} → <strong>${escapeHtml(step.to)}</strong> <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
     }
-
-    result.hidden = false;
-    const evaluation = evaluateRouteOption(state.originPoint, state.probePoint, state.routeOption);
-    state.routeOptionResult = evaluation;
-
-    if (!evaluation.viable) {
-      result.innerHTML = `<p class="route-option-unviable">${escapeHtml(evaluation.reason)}</p>`;
-      continue;
+    if (step.kind === "transfer") {
+      return `<li class="route-comparison-step route-comparison-step-transfer">Transfer ${renderRouteBadge(step.from)} → ${renderRouteBadge(step.to)} at ${escapeHtml(step.at)} <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
     }
+    return "";
+  }).join("");
+  return `
+    <div class="route-comparison-total">Total: <strong>${formatMinutes(ev.totalMinutes)}</strong></div>
+    <ol class="route-comparison-steps">${stepsHtml}</ol>
+  `;
+}
 
-    const stepsHtml = evaluation.steps.map((step) => {
-      if (step.kind === "walk") {
-        return `<li class="route-option-step route-option-step-walk">Walk ${formatMinutes(step.minutes)} to/from <strong>${escapeHtml(step.stationName)}</strong></li>`;
-      }
-      if (step.kind === "ride") {
-        return `<li class="route-option-step route-option-step-ride">${renderRouteBadge(step.routeId)} ${escapeHtml(step.from)} → <strong>${escapeHtml(step.to)}</strong> <span class="route-option-step-time">${formatMinutes(step.minutes)}</span></li>`;
-      }
-      if (step.kind === "transfer") {
-        return `<li class="route-option-step route-option-step-transfer">Transfer ${renderRouteBadge(step.from)} → ${renderRouteBadge(step.to)} at ${escapeHtml(step.at)} <span class="route-option-step-time">${formatMinutes(step.minutes)}</span></li>`;
-      }
-      return "";
-    }).join("");
-
-    result.innerHTML = `
-      <div class="route-option-total">Total: <strong>${formatMinutes(evaluation.totalMinutes)}</strong></div>
-      <ol class="route-option-steps">${stepsHtml}</ol>
+function renderComparisonRows() {
+  return state.routeOptions.map((seq, i) => {
+    const isActive = i === state.activeRouteOptionIndex;
+    const seqHtml = seq.length === 0
+      ? '<span class="route-comparison-placeholder">Tap a route below to add it</span>'
+      : seq.map((id, j) =>
+          (j > 0 ? '<span class="route-comparison-arrow" aria-hidden="true">→</span>' : "") +
+          renderRouteBadge(id),
+        ).join("");
+    const resultHtml = renderComparisonResult(seq);
+    return `
+      <div class="route-comparison${isActive ? " is-active" : ""}" data-index="${i}">
+        <div class="route-comparison-head">
+          <button class="route-comparison-sequence-btn" type="button" data-action="focus" data-index="${i}" aria-label="Select route option ${i + 1}">
+            ${seqHtml}
+          </button>
+          <button class="route-comparison-remove" type="button" data-action="remove" data-index="${i}" aria-label="Remove option ${i + 1}">×</button>
+        </div>
+        ${resultHtml ? `<div class="route-comparison-result">${resultHtml}</div>` : ""}
+      </div>
     `;
+  }).join("");
+}
+
+function syncRouteBuilderPanel() {
+  const activeSeq = state.routeOptions[state.activeRouteOptionIndex] ?? [];
+  const hasActiveRoutes = activeSeq.length > 0;
+
+  for (const [comparisonsEl, undoBtn, addBtn] of [
+    [routeComparisons, undoRouteBtn, addComparisonBtn],
+    [mobileRouteComparisons, mobileUndoRouteBtn, mobileAddComparisonBtn],
+  ]) {
+    if (comparisonsEl) comparisonsEl.innerHTML = renderComparisonRows();
+    if (undoBtn) undoBtn.hidden = !hasActiveRoutes;
+    if (addBtn) addBtn.hidden = !hasActiveRoutes;
   }
 }
 
-function addRouteOptionRoute(rawInput) {
-  const routeId = rawInput.trim().toUpperCase();
-  if (!routeId) return;
-  if (!state.routeStationIndex?.has(routeId)) return;
-  state.routeOption = [...state.routeOption, routeId];
-  syncRouteOptionPanel();
+function addRouteToActiveSequence(routeId) {
+  const idx = state.activeRouteOptionIndex;
+  state.routeOptions = state.routeOptions.map((seq, i) =>
+    i === idx ? [...seq, routeId] : seq,
+  );
+  syncRouteBuilderPanel();
 }
 
-function clearRouteOption() {
-  state.routeOption = [];
-  state.routeOptionResult = null;
-  syncRouteOptionPanel();
+function undoLastRoute() {
+  const idx = state.activeRouteOptionIndex;
+  state.routeOptions = state.routeOptions.map((seq, i) =>
+    i === idx ? seq.slice(0, -1) : seq,
+  );
+  syncRouteBuilderPanel();
+}
+
+function removeSequence(index) {
+  state.routeOptions = state.routeOptions.filter((_, i) => i !== index);
+  if (state.routeOptions.length === 0) state.routeOptions = [[]];
+  state.activeRouteOptionIndex = Math.min(
+    state.activeRouteOptionIndex,
+    state.routeOptions.length - 1,
+  );
+  syncRouteBuilderPanel();
+}
+
+function addNewComparison() {
+  state.routeOptions = [...state.routeOptions, []];
+  state.activeRouteOptionIndex = state.routeOptions.length - 1;
+  syncRouteBuilderPanel();
+}
+
+function setActiveSequence(index) {
+  state.activeRouteOptionIndex = index;
+  syncRouteBuilderPanel();
+}
+
+function initRoutePalette(paletteEl) {
+  if (!paletteEl || !state.routeStationIndex) return;
+  const routeIds = sortRouteIds(state.routeStationIndex.keys());
+  paletteEl.innerHTML = routeIds.map((routeId) => {
+    const style = state.data.routeStyles?.[routeId];
+    const label = style?.label ?? routeId;
+    const bg = style?.color ?? "#5a6e84";
+    const fg = style?.textColor ?? "#ffffff";
+    return `<button class="route-palette-btn" type="button" data-route-id="${escapeHtml(routeId)}" style="background-color:${bg};color:${fg}" aria-label="Add ${label}">${escapeHtml(label)}</button>`;
+  }).join("");
+  paletteEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".route-palette-btn");
+    if (btn) addRouteToActiveSequence(btn.dataset.routeId);
+  });
 }
 
 function summarizeReachability(origin, originDistances) {
@@ -2947,14 +2990,14 @@ function setProbePoint(worldPoint) {
   state.probePoint = worldPoint;
   state.probePinned = Boolean(worldPoint);
   syncProbeRouteTable(worldPoint);
-  syncRouteOptionPanel();
+  syncRouteBuilderPanel();
 }
 
 function clearProbePoint() {
   state.probePoint = null;
   state.probePinned = false;
   syncProbeRouteTable(null);
-  syncRouteOptionPanel();
+  syncRouteBuilderPanel();
   syncBrowserUrl();
 }
 
@@ -3170,7 +3213,7 @@ function setPinnedOrigin(worldPoint) {
   state.pinned = true;
   state.cursorPoint = worldPoint;
   syncBrowserUrl();
-  syncRouteOptionPanel();
+  syncRouteBuilderPanel();
   state.dirty = true;
   syncMobileSheet();
   requestDraw();
@@ -3186,7 +3229,7 @@ function clearPinnedOrigin() {
   state.originPoint = null;
   state.originLabel = null;
   syncBrowserUrl();
-  syncRouteOptionPanel();
+  syncRouteBuilderPanel();
   state.dirty = true;
   syncMobileSheet();
   requestDraw();
@@ -3384,7 +3427,7 @@ async function init() {
   heatmapToggle.checked = state.showHeatmap;
   outlineToggle.checked = state.showReachOutline;
   syncProbeRouteTable(state.probePoint);
-  syncRouteOptionPanel();
+  syncRouteBuilderPanel();
   syncTravelSettingsInputs();
   syncHeatmapLegend();
   syncZoomControls();
@@ -3743,24 +3786,30 @@ async function init() {
     expandMobileHelp();
   });
 
-  for (const [addBtn, input, clearBtn] of [
-    [routeOptionAddBtn, routeOptionInput, routeOptionClearBtn],
-    [mobileRouteOptionAddBtn, mobileRouteOptionInput, mobileRouteOptionClearBtn],
+  for (const [addBtn, undoBtn, comparisonsEl] of [
+    [addComparisonBtn, undoRouteBtn, routeComparisons],
+    [mobileAddComparisonBtn, mobileUndoRouteBtn, mobileRouteComparisons],
   ]) {
-    if (!addBtn || !input || !clearBtn) continue;
-    const doAdd = () => {
-      addRouteOptionRoute(input.value);
-      input.value = "";
-      input.focus();
-    };
-    addBtn.addEventListener("click", doAdd);
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); doAdd(); }
-    });
-    clearBtn.addEventListener("click", () => {
-      clearRouteOption();
+    addBtn?.addEventListener("click", addNewComparison);
+    undoBtn?.addEventListener("click", undoLastRoute);
+    comparisonsEl?.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      const idx = Number(btn.dataset.index);
+      if (btn.dataset.action === "focus") setActiveSequence(idx);
+      if (btn.dataset.action === "remove") removeSequence(idx);
     });
   }
+
+  document.addEventListener("click", (e) => {
+    const collapseBtn = e.target.closest(".nearest-route-collapse-btn");
+    if (collapseBtn) {
+      collapseBtn.closest(".nearest-route-panel")?.classList.toggle("is-collapsed");
+    }
+  });
+
+  initRoutePalette(routePalette);
+  initRoutePalette(mobileRoutePalette);
 
   setupFooterEmojiBursts();
   syncFullscreenButton();
