@@ -487,6 +487,46 @@ def build_route_waits(trips_by_id: dict) -> Dict[str, float]:
     return route_waits
 
 
+def build_route_stop_schedules(
+    trips_by_id: dict,
+    stop_to_complex: Dict[str, str],
+    station_index_by_id: Dict[str, int],
+    state_index_by_key: Dict[Tuple[int, str], int],
+    num_route_states: int,
+) -> Dict[str, list]:
+    """Build per-(routeState, serviceDay) sorted departure-time arrays (minutes since midnight)."""
+    service_ids = {"Weekday", "Saturday", "Sunday"}
+    raw: Dict[str, Dict[int, List[float]]] = {svc: {} for svc in service_ids}
+
+    for row in read_csv_from_zip(GTFS_PATH, "stop_times.txt"):
+        trip = trips_by_id.get(row["trip_id"])
+        if not trip:
+            continue
+        svc = trip["service_id"]
+        if svc not in service_ids:
+            continue
+        complex_id = stop_to_complex.get(row["stop_id"])
+        if not complex_id:
+            continue
+        si = station_index_by_id.get(complex_id)
+        if si is None:
+            continue
+        rsi = state_index_by_key.get((si, trip["route_id"]))
+        if rsi is None:
+            continue
+        dep_min = parse_gtfs_time(row["departure_time"]) / 60.0
+        raw[svc].setdefault(rsi, []).append(dep_min)
+
+    # Convert to sorted deduplicated lists, then to dense arrays indexed by routeStateIndex
+    result: Dict[str, list] = {}
+    for svc in service_ids:
+        dense: list = [[] for _ in range(num_route_states)]
+        for rsi, deps in raw[svc].items():
+            dense[rsi] = sorted(set(round(d, 2) for d in deps))
+        result[svc] = dense
+    return result
+
+
 def build_graph(
     stations: list,
     station_index_by_id: Dict[str, int],
@@ -595,6 +635,7 @@ def build_graph(
     return (
         route_states,
         station_states,
+        state_index_by_key,
         [
             [[to_index, weight] for to_index, weight in sorted(edges.items())]
             for edges in adjacency
@@ -724,7 +765,7 @@ def main() -> None:
     stations, station_index_by_id, stop_to_complex = build_station_data(lat0)
     route_styles, route_shapes, trips_by_id = build_routes_and_shapes(lat0, bbox)
     route_waits = build_route_waits(trips_by_id)
-    route_states, station_states, adjacency = build_graph(
+    route_states, station_states, state_index_by_key, adjacency = build_graph(
         stations, station_index_by_id, stop_to_complex, trips_by_id, route_waits
     )
     add_staten_island_ferry(
@@ -736,6 +777,10 @@ def main() -> None:
         route_states,
         station_states,
         adjacency,
+    )
+    # Build after ferry so len(route_states) includes ferry states (which get empty schedules)
+    route_stop_schedules = build_route_stop_schedules(
+        trips_by_id, stop_to_complex, station_index_by_id, state_index_by_key, len(route_states)
     )
     cells, mask = build_grid_cells(all_polygons, stations, bbox)
 
@@ -771,6 +816,7 @@ def main() -> None:
         "routeStates": route_states,
         "stationStates": station_states,
         "routeWaits": route_waits,
+        "routeStopSchedules": route_stop_schedules,
         "adjacency": adjacency,
         "cells": cells,
         "mask": mask,

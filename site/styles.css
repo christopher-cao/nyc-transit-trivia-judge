@@ -1013,6 +1013,78 @@ canvas {
   box-shadow: 0 12px 28px rgba(23, 48, 77, 0.08);
 }
 
+.sidebar-time-panel {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(23, 48, 77, 0.12);
+  background: rgba(255, 252, 247, 0.92);
+  box-shadow: 0 12px 28px rgba(23, 48, 77, 0.08);
+}
+
+.sidebar-time-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.sidebar-day-pills {
+  display: flex;
+  gap: 4px;
+}
+
+.day-pill {
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(23, 48, 77, 0.2);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #17304d;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.day-pill:hover {
+  background: rgba(23, 48, 77, 0.06);
+}
+
+.day-pill.active {
+  background: #17304d;
+  color: #fff;
+  border-color: #17304d;
+}
+
+.sidebar-time-input {
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(23, 48, 77, 0.2);
+  font-size: 13px;
+  color: #17304d;
+  background: #fff;
+  cursor: pointer;
+}
+
+.sidebar-time-input:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sidebar-time-clear {
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(23, 48, 77, 0.2);
+  background: transparent;
+  font-size: 11px;
+  color: #666;
+  cursor: pointer;
+}
+
+.sidebar-time-clear:hover {
+  background: rgba(23, 48, 77, 0.06);
+}
+
 .route-builder-head {
   display: flex;
   justify-content: space-between;
@@ -1162,6 +1234,15 @@ canvas {
   color: var(--muted);
   font-size: 0.76rem;
 }
+.route-step-clock {
+  font-size: 0.72rem;
+  color: #888;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  background: rgba(23, 48, 77, 0.06);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
 
 .route-comparison-step-walk {
   color: var(--muted);
@@ -1172,6 +1253,44 @@ canvas {
   color: var(--muted);
   font-style: italic;
   margin: 0;
+}
+
+.optimal-path-accordion {
+  margin-top: 10px;
+  border-top: 1px dashed rgba(23, 48, 77, 0.15);
+  padding-top: 8px;
+}
+
+.optimal-path-summary {
+  font-size: 0.78rem;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.optimal-path-summary::-webkit-details-marker { display: none; }
+
+.optimal-path-summary::before {
+  content: "▶";
+  font-size: 0.6rem;
+  transition: transform 0.15s;
+}
+
+details[open] .optimal-path-summary::before {
+  transform: rotate(90deg);
+}
+
+.optimal-path-total {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.optimal-path-accordion ol {
+  margin-top: 6px;
 }
 
 .route-palette {

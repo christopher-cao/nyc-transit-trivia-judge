@@ -90,6 +90,9 @@ const state = {
   routeOptions: [[]],
   activeRouteOptionIndex: 0,
   routeOptionEvals: [],
+  optimalPathResult: null,
+  selectedDayType: null,
+  selectedTimeMinutes: null,
   dirty: true,
 };
 
@@ -132,6 +135,8 @@ const destAddressInput = document.getElementById("destAddressInput");
 const destSearchButton = document.getElementById("destSearchButton");
 const destSearchMeta = document.getElementById("destSearchMeta");
 const destSearchResults = document.getElementById("destSearchResults");
+const timePickerInput = document.getElementById("timePickerInput");
+const clearTimeBtn = document.getElementById("clearTimeBtn");
 const mapDistanceOverlay = document.getElementById("mapDistanceOverlay");
 const mapDistanceOptimal = document.getElementById("mapDistanceOptimal");
 const mapDistanceRoute = document.getElementById("mapDistanceRoute");
@@ -619,6 +624,15 @@ function formatMinutes(minutes) {
   if (!Number.isFinite(minutes)) return "unreachable";
   if (minutes < 1) return "<1 min";
   return `${Math.round(minutes)} min`;
+}
+
+function formatClock(absoluteMinutes) {
+  const total = Math.round(absoluteMinutes) % 1440;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  const ampm = h < 12 ? "am" : "pm";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
 }
 
 function formatTravelBreakdown(baseMinutes, swimMinutes) {
@@ -1438,22 +1452,45 @@ function nearestStations(point, count) {
     .slice(0, count);
 }
 
+function nextDeparture(rsi, absoluteTimeMinutes) {
+  const deps = state.data.routeStopSchedules?.[state.selectedDayType]?.[rsi];
+  if (!deps || !deps.length) return Infinity;
+  let lo = 0, hi = deps.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (deps[mid] < absoluteTimeMinutes) lo = mid + 1; else hi = mid;
+  }
+  return lo < deps.length ? deps[lo] : deps[0] + 1440;
+}
+
 function runDijkstra(origin) {
   const settings = currentTravelSettings();
   const stateCount = state.data.routeStates.length;
   const distances = new Array(stateCount).fill(Infinity);
+  const prev = new Array(stateCount).fill(-1);
   const visited = new Array(stateCount).fill(false);
   const seeds = nearestStations(origin.point, state.data.meta.originStationCount);
 
+  const useSchedule = state.selectedTimeMinutes !== null && state.selectedDayType !== null;
+  const queryTime = state.selectedTimeMinutes ?? 0;
+
   for (const seed of seeds) {
     for (const routeStateIndex of state.data.stationStates[seed.index] || []) {
+      const arrivalAtStation = origin.swimMinutes + seed.walkMinutes;
+      let waitMinutes;
+      if (useSchedule) {
+        const dep = nextDeparture(routeStateIndex, queryTime + arrivalAtStation);
+        waitMinutes = dep === Infinity ? Infinity : dep - (queryTime + arrivalAtStation);
+      } else {
       const routeId = state.data.routeStates[routeStateIndex].routeId;
       const boardingDelta =
         (state.data.routeWaits?.[routeId] ?? state.travelSettingsDefaults.transitTime) -
         state.travelSettingsDefaults.transitTime;
+        waitMinutes = settings.transitTime + boardingDelta;
+      }
       distances[routeStateIndex] = Math.min(
         distances[routeStateIndex],
-        origin.swimMinutes + seed.walkMinutes + settings.transitTime + boardingDelta,
+        arrivalAtStation + waitMinutes,
       );
     }
   }
@@ -1470,7 +1507,18 @@ function runDijkstra(origin) {
     if (current === -1) break;
     visited[current] = true;
     for (const edge of state.dynamicAdjacency[current]) {
-      const weight =
+      let weight;
+      if (useSchedule && edge.kind !== "ride") {
+        const walkTime = edge.kind === "interchange"
+          ? edge.walkDistance / settings.walkingSpeed + edge.walkPenalty
+          : 0;
+        const transferPenalty = settings.transferTime;
+        const absoluteArrival = queryTime + distances[current] + walkTime;
+        const dep = nextDeparture(edge.toIndex, absoluteArrival);
+        const boardingWait = dep === Infinity ? Infinity : dep - absoluteArrival;
+        weight = walkTime + transferPenalty + boardingWait;
+      } else {
+        weight =
         edge.kind === "ride"
           ? edge.rideMinutes
           : edge.kind === "transfer"
@@ -1480,13 +1528,17 @@ function runDijkstra(origin) {
               settings.transferTime +
               settings.transitTime +
               edge.boardingDelta;
+      }
       const nextIndex = edge.toIndex;
       const candidate = distances[current] + weight;
-      if (candidate < distances[nextIndex]) distances[nextIndex] = candidate;
+      if (candidate < distances[nextIndex]) {
+        distances[nextIndex] = candidate;
+        prev[nextIndex] = current;
+      }
     }
   }
 
-  return { distances, seeds };
+  return { distances, prev, seeds };
 }
 
 function estimateTravel(origin, originDistances, destinationPoint) {
@@ -1511,6 +1563,81 @@ function estimateTravel(origin, originDistances, destinationPoint) {
     swimMinutes,
     destination,
   };
+}
+
+function traceOptimalPath(origin, warp, destinationPoint) {
+  if (!warp?.prev || !warp.distances) return null;
+  const { distances, prev } = warp;
+  const settings = currentTravelSettings();
+  const routeStates = state.data.routeStates;
+  const stations = state.data.stations;
+  const destination = normalizeTravelPoint(destinationPoint);
+
+  // Find best exit: lowest distances[rsi] + walkToDestination
+  let bestTotal = Infinity;
+  let bestExitRsi = -1;
+  let bestExitSi = -1;
+  const nearby = nearestStations(destination.point, state.data.meta.cellNearestStations);
+  for (const station of nearby) {
+    const walkOut = station.walkMinutes + destination.swimMinutes;
+    for (const rsi of state.data.stationStates[station.index] || []) {
+      const total = distances[rsi] + walkOut;
+      if (total < bestTotal) {
+        bestTotal = total;
+        bestExitRsi = rsi;
+        bestExitSi = station.index;
+      }
+    }
+  }
+  // Also try pure walk
+  const pureWalk = distance(origin.point, destination.point) / settings.walkingSpeed + origin.swimMinutes + destination.swimMinutes;
+  if (pureWalk < bestTotal) return { steps: [{ kind: "walk", stationName: null, minutes: pureWalk }], totalMinutes: pureWalk };
+  if (bestExitRsi === -1) return null;
+
+  // Trace back through prev
+  const path = [];
+  let node = bestExitRsi;
+  while (node !== -1) {
+    path.push(node);
+    node = prev[node];
+  }
+  path.reverse();
+
+  // Reconstruct steps
+  const steps = [];
+  const entrySi = routeStates[path[0]].stationIndex;
+  const entryWalk = walkMinutesToStation(origin.point, entrySi) + origin.swimMinutes;
+  steps.push({ kind: "walk", stationName: stations[entrySi].name, minutes: entryWalk });
+
+  let rideStartName = stations[entrySi].name;
+  let rideStartRsi = path[0];
+  let rideDist = distances[path[0]] - entryWalk;
+
+  for (let i = 1; i < path.length; i++) {
+    const rsi = path[i];
+    const prevRsi = path[i - 1];
+    const edgeDist = distances[rsi] - distances[prevRsi];
+    const prevRouteId = routeStates[prevRsi].routeId;
+    const curRouteId = routeStates[rsi].routeId;
+
+    if (curRouteId === prevRouteId) {
+      rideDist += edgeDist;
+    } else {
+      // Route change — emit ride + transfer
+      const transferSi = routeStates[prevRsi].stationIndex;
+      steps.push({ kind: "ride", routeId: prevRouteId, from: rideStartName, to: stations[transferSi].name, minutes: rideDist });
+      steps.push({ kind: "transfer", at: stations[transferSi].name, from: prevRouteId, to: curRouteId, minutes: edgeDist });
+      rideStartName = stations[routeStates[rsi].stationIndex].name;
+      rideDist = 0;
+    }
+  }
+
+  const exitStation = stations[bestExitSi];
+  const exitWalk = walkMinutesToStation(destinationPoint, bestExitSi) + destination.swimMinutes;
+  steps.push({ kind: "ride", routeId: routeStates[path[path.length - 1]].routeId, from: rideStartName, to: exitStation.name, minutes: rideDist });
+  steps.push({ kind: "walk", stationName: exitStation.name, minutes: exitWalk });
+
+  return { steps, totalMinutes: bestTotal };
 }
 
 function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
@@ -1555,16 +1682,25 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
   const visited = new Uint8Array(totalNodes);
 
   // Seed: all route states for routeIds[0] reachable from origin
+  const useSchedule = state.selectedTimeMinutes !== null && state.selectedDayType !== null;
+  const queryTime = state.selectedTimeMinutes ?? 0;
+
   for (const si of state.routeStationIndex.get(routeIds[0])) {
     const w = walkMinutesToStation(originPoint, si);
     if (w > MAX_WALK_TO_STATION_MINUTES) continue;
     for (const rsi of state.data.stationStates[si] || []) {
       if (routeStates[rsi].routeId !== routeIds[0]) continue;
-      const routeId = routeIds[0];
+      let waitMinutes;
+      if (useSchedule) {
+        const dep = nextDeparture(rsi, queryTime + w);
+        waitMinutes = dep === Infinity ? Infinity : dep - (queryTime + w);
+      } else {
       const boardingDelta =
-        (state.data.routeWaits?.[routeId] ?? state.travelSettingsDefaults.transitTime) -
+          (state.data.routeWaits?.[routeIds[0]] ?? state.travelSettingsDefaults.transitTime) -
         state.travelSettingsDefaults.transitTime;
-      const d = w + settings.transitTime + boardingDelta;
+        waitMinutes = settings.transitTime + boardingDelta;
+      }
+      const d = w + waitMinutes;
       const node = rsi * N + 0;
       if (d < dist[node]) { dist[node] = d; }
     }
@@ -1596,14 +1732,19 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
         (edge.kind === "transfer" || edge.kind === "interchange") &&
         toRouteId === routeIds[phase + 1]
       ) {
-        weight =
-          edge.kind === "transfer"
-            ? settings.transferTime + settings.transitTime + edge.boardingDelta
-            : edge.walkDistance / settings.walkingSpeed +
-              edge.walkPenalty +
-              settings.transferTime +
-              settings.transitTime +
-              edge.boardingDelta;
+        const walkTime =
+          edge.kind === "interchange"
+            ? edge.walkDistance / settings.walkingSpeed + edge.walkPenalty
+            : 0;
+        let boardingWait;
+        if (useSchedule) {
+          const absoluteArrival = queryTime + dist[current] + walkTime;
+          const dep = nextDeparture(toRsi, absoluteArrival);
+          boardingWait = dep === Infinity ? Infinity : dep - absoluteArrival;
+        } else {
+          boardingWait = settings.transitTime + edge.boardingDelta;
+        }
+        weight = walkTime + settings.transferTime + boardingWait;
         toPhase = phase + 1;
       } else {
         continue;
@@ -1722,21 +1863,58 @@ function renderComparisonResult(seq, i) {
   if (!ev.viable) {
     return `<p class="route-comparison-unviable">${escapeHtml(ev.reason)}</p>`;
   }
+  const showClock = state.selectedTimeMinutes !== null && state.selectedDayType !== null;
+  let clock = state.selectedTimeMinutes ?? 0;
   const stepsHtml = ev.steps.map((step) => {
+    const stepStart = clock;
+    clock += step.minutes;
+    const timeTag = showClock
+      ? `<span class="route-step-clock">${formatClock(stepStart)}–${formatClock(clock)}</span>`
+      : "";
     if (step.kind === "walk") {
-      return `<li class="route-comparison-step route-comparison-step-walk">Walk ${formatMinutes(step.minutes)} · <strong>${escapeHtml(step.stationName)}</strong></li>`;
+      return `<li class="route-comparison-step route-comparison-step-walk">${timeTag}Walk ${formatMinutes(step.minutes)} · <strong>${escapeHtml(step.stationName)}</strong></li>`;
     }
     if (step.kind === "ride") {
-      return `<li class="route-comparison-step route-comparison-step-ride">${renderRouteBadge(step.routeId)} ${escapeHtml(step.from)} → <strong>${escapeHtml(step.to)}</strong> <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
+      return `<li class="route-comparison-step route-comparison-step-ride">${timeTag}${renderRouteBadge(step.routeId)} ${escapeHtml(step.from)} → <strong>${escapeHtml(step.to)}</strong> <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
     }
     if (step.kind === "transfer") {
-      return `<li class="route-comparison-step route-comparison-step-transfer">Transfer ${renderRouteBadge(step.from)} → ${renderRouteBadge(step.to)} at ${escapeHtml(step.at)} <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
+      return `<li class="route-comparison-step route-comparison-step-transfer">${timeTag}Transfer ${renderRouteBadge(step.from)} → ${renderRouteBadge(step.to)} at ${escapeHtml(step.at)} <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
     }
     return "";
   }).join("");
   return `
     <div class="route-comparison-total">Total: <strong>${formatMinutes(ev.totalMinutes)}</strong></div>
     <ol class="route-comparison-steps">${stepsHtml}</ol>
+  `;
+}
+
+function renderOptimalPathAccordion() {
+  const result = state.optimalPathResult;
+  if (!result) return "";
+  const showClock = state.selectedTimeMinutes !== null && state.selectedDayType !== null;
+  let clock = state.selectedTimeMinutes ?? 0;
+  const stepsHtml = result.steps.map((step) => {
+    const stepStart = clock;
+    clock += step.minutes;
+    const timeTag = showClock
+      ? `<span class="route-step-clock">${formatClock(stepStart)}–${formatClock(clock)}</span>`
+      : "";
+    if (step.kind === "walk") {
+      return `<li class="route-comparison-step route-comparison-step-walk">${timeTag}Walk ${formatMinutes(step.minutes)}${step.stationName ? ` · <strong>${escapeHtml(step.stationName)}</strong>` : ""}</li>`;
+    }
+    if (step.kind === "ride") {
+      return `<li class="route-comparison-step route-comparison-step-ride">${timeTag}${renderRouteBadge(step.routeId)} ${escapeHtml(step.from)} → <strong>${escapeHtml(step.to)}</strong> <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
+    }
+    if (step.kind === "transfer") {
+      return `<li class="route-comparison-step route-comparison-step-transfer">${timeTag}Transfer ${renderRouteBadge(step.from)} → ${renderRouteBadge(step.to)} at ${escapeHtml(step.at)} <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
+    }
+    return "";
+  }).join("");
+  return `
+    <details class="optimal-path-accordion">
+      <summary class="optimal-path-summary">✨ Answer key <span class="optimal-path-total">${formatMinutes(result.totalMinutes)}</span></summary>
+      <ol class="route-comparison-steps">${stepsHtml}</ol>
+    </details>
   `;
 }
 
@@ -1774,6 +1952,7 @@ function syncRouteBuilderPanel() {
     );
   } else {
     state.routeOptionEvals = state.routeOptions.map(() => null);
+    state.optimalPathResult = null;
   }
   state.dirty = true;
   requestDraw();
@@ -2032,7 +2211,7 @@ function syncProbeRouteTable(probePoint) {
 }
 
 function computeWarp(origin) {
-  const { distances, seeds } = runDijkstra(origin);
+  const { distances, prev, seeds } = runDijkstra(origin);
   const settings = currentTravelSettings();
   const { gridCols, gridRows, bounds } = state.data.meta;
   const [minX, minY, maxX, maxY] = bounds;
@@ -2278,6 +2457,7 @@ function computeWarp(origin) {
 
   return {
     distances,
+    prev,
     seeds,
     reachability,
     warpPoint,
@@ -3877,6 +4057,58 @@ async function init() {
       destSearchMeta.textContent = "Address lookup failed. Try a more specific NYC address.";
     } finally {
       destSearchButton.disabled = false;
+    }
+  });
+
+  // Time picker
+  document.querySelectorAll(".day-pill").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const day = btn.dataset.day;
+      if (state.selectedDayType === day) return;
+      document.querySelectorAll(".day-pill").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.selectedDayType = day;
+      timePickerInput.disabled = false;
+      if (state.selectedTimeMinutes === null) {
+        const [h, m] = timePickerInput.value.split(":").map(Number);
+        state.selectedTimeMinutes = h * 60 + m;
+      }
+      clearTimeBtn.hidden = false;
+      state.dirty = true;
+      requestDraw();
+      syncRouteBuilderPanel();
+    });
+  });
+
+  timePickerInput?.addEventListener("change", () => {
+    if (!state.selectedDayType) return;
+    const [h, m] = timePickerInput.value.split(":").map(Number);
+    state.selectedTimeMinutes = h * 60 + m;
+    state.dirty = true;
+    requestDraw();
+    syncRouteBuilderPanel();
+  });
+
+  clearTimeBtn?.addEventListener("click", () => {
+    state.selectedDayType = null;
+    state.selectedTimeMinutes = null;
+    document.querySelectorAll(".day-pill").forEach((b) => b.classList.remove("active"));
+    timePickerInput.disabled = true;
+    clearTimeBtn.hidden = true;
+    state.dirty = true;
+    requestDraw();
+    syncRouteBuilderPanel();
+  });
+
+  setOriginBtn?.addEventListener("click", () => setPlacingOrigin(!state.placingOrigin));
+  setDestinationBtn?.addEventListener("click", () => setPlacingDestination(!state.placingDestination));
+  clearOriginBtn?.addEventListener("click", () => clearPinnedOrigin());
+  clearDestBtn?.addEventListener("click", () => { clearProbePoint(); state.dirty = true; requestDraw(); });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (state.placingOrigin) setPlacingOrigin(false);
+      else if (state.placingDestination) setPlacingDestination(false);
     }
   });
 

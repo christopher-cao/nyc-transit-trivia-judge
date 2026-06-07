@@ -167,7 +167,7 @@
           <div class="panel-sidebar">
           <div class="panel-header">
             <div>
-              <h2>Commute-time warp</h2>
+              <h2>Route comparison</h2>
               <p id="statusText">Loading transit network…</p>
             </div>
             <div class="panel-controls">
@@ -230,16 +230,19 @@
               <div id="originSearchMeta" class="search-meta" hidden></div>
               <div id="originSearchResults" class="search-results" aria-live="polite"></div>
             </form>
-            <form id="destSearchForm" class="sidebar-search-form" autocomplete="off" style="margin-top:12px">
-              <label class="sidebar-search-label" for="destAddressInput">Destination</label>
-              <div class="sidebar-search-row">
-                <input id="destAddressInput" name="destAddress" type="text" placeholder="Search an NYC address" autocomplete="off" />
-                <button id="destSearchButton" class="pin-button search-button" type="submit">Go</button>
+          <section class="sidebar-time-panel">
+            <div class="sidebar-search-label">Departure time</div>
+            <div class="sidebar-time-row">
+              <div class="sidebar-day-pills">
+                <button class="day-pill" data-day="Weekday" type="button">Weekday</button>
+                <button class="day-pill" data-day="Saturday" type="button">Sat</button>
+                <button class="day-pill" data-day="Sunday" type="button">Sun</button>
               </div>
-              <div id="destSearchMeta" class="search-meta" hidden></div>
-              <div id="destSearchResults" class="search-results" aria-live="polite"></div>
-            </form>
+              <input id="timePickerInput" class="sidebar-time-input" type="time" value="08:00" disabled>
+              <button id="clearTimeBtn" class="sidebar-time-clear" type="button" hidden>✕ Any time</button>
+            </div>
           </section>
+          <div id="optimalAccordionContainer"></div>
           <section id="routeBuilderPanel" class="route-builder-panel" aria-live="polite">
             <div class="route-builder-head">
               <h3 class="route-builder-title">Route options</h3>
