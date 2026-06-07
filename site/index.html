@@ -321,6 +321,62 @@
               <span id="heatmapLegendMax">80m</span>
             </div>
           </div>
+          <section id="nearestRoutePanel" class="nearest-route-panel" aria-live="polite" hidden>
+            <div class="nearest-route-head">
+              <h3 class="nearest-route-title">Nearest station by line</h3>
+              <p id="nearestRouteMeta" class="nearest-route-meta">
+                Pin an origin to see the nearest station for each subway line.
+              </p>
+            </div>
+            <div class="nearest-route-table-wrap">
+              <table class="nearest-route-table">
+                <thead>
+                  <tr>
+                    <th scope="col" data-sort-col="line"><button class="sort-th-btn" type="button">Line<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="station"><button class="sort-th-btn" type="button">Nearest station<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="walk"><button class="sort-th-btn" type="button">Walk<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="status"><button class="sort-th-btn" type="button">Status<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                  </tr>
+                </thead>
+                <tbody id="nearestRouteTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+          <section id="probeRoutePanel" class="nearest-route-panel" aria-live="polite" hidden>
+            <div class="nearest-route-head">
+              <h3 class="nearest-route-title">Nearest station by line (destination)</h3>
+              <p id="probeRouteMeta" class="nearest-route-meta">
+                Pin a destination to see the nearest station for each subway line.
+              </p>
+            </div>
+            <div class="nearest-route-table-wrap">
+              <table class="nearest-route-table">
+                <thead>
+                  <tr>
+                    <th scope="col" data-sort-col="line"><button class="sort-th-btn" type="button">Line<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="station"><button class="sort-th-btn" type="button">Nearest station<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="walk"><button class="sort-th-btn" type="button">Walk<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="status"><button class="sort-th-btn" type="button">Status<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                  </tr>
+                </thead>
+                <tbody id="probeRouteTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+          <section id="routeOptionPanel" class="nearest-route-panel route-option-panel" aria-live="polite">
+            <div class="nearest-route-head">
+              <h3 class="nearest-route-title">Route option</h3>
+            </div>
+            <div id="routeOptionSequence" class="route-option-sequence">
+              <span class="route-option-placeholder">No routes added yet</span>
+            </div>
+            <div class="route-option-input-row">
+              <input id="routeOptionInput" class="route-option-input" type="text" placeholder="e.g. A" aria-label="Add route" maxlength="4" />
+              <button id="routeOptionAddBtn" class="route-option-add-btn" type="button">Add</button>
+              <button id="routeOptionClearBtn" class="route-option-clear-btn" type="button">Clear</button>
+            </div>
+            <div id="routeOptionResult" class="route-option-result" hidden></div>
+          </section>
           <section
             id="mobileSheet"
             class="mobile-sheet"
@@ -360,6 +416,62 @@
                   </p>
                 </div>
               </div>
+              <section id="mobileNearestRoutePanel" class="nearest-route-panel mobile-nearest-route-panel" aria-live="polite" hidden>
+                <div class="nearest-route-head">
+                  <h3 class="nearest-route-title">Nearest station by line</h3>
+                  <p id="mobileNearestRouteMeta" class="nearest-route-meta">
+                    Pin an origin to see the nearest station for each subway line.
+                  </p>
+                </div>
+                <div class="nearest-route-table-wrap">
+                  <table class="nearest-route-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Line</th>
+                        <th scope="col">Nearest station</th>
+                        <th scope="col">Walk</th>
+                        <th scope="col">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="mobileNearestRouteTableBody"></tbody>
+                  </table>
+                </div>
+              </section>
+              <section id="mobileProbeRoutePanel" class="nearest-route-panel mobile-nearest-route-panel" aria-live="polite" hidden>
+                <div class="nearest-route-head">
+                  <h3 class="nearest-route-title">Nearest station by line (destination)</h3>
+                  <p id="mobileProbeRouteMeta" class="nearest-route-meta">
+                    Pin a destination to see the nearest station for each subway line.
+                  </p>
+                </div>
+                <div class="nearest-route-table-wrap">
+                  <table class="nearest-route-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Line</th>
+                        <th scope="col">Nearest station</th>
+                        <th scope="col">Walk</th>
+                        <th scope="col">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="mobileProbeRouteTableBody"></tbody>
+                  </table>
+                </div>
+              </section>
+              <section id="mobileRouteOptionPanel" class="nearest-route-panel mobile-nearest-route-panel route-option-panel" aria-live="polite">
+                <div class="nearest-route-head">
+                  <h3 class="nearest-route-title">Route option</h3>
+                </div>
+                <div id="mobileRouteOptionSequence" class="route-option-sequence">
+                  <span class="route-option-placeholder">No routes added yet</span>
+                </div>
+                <div class="route-option-input-row">
+                  <input id="mobileRouteOptionInput" class="route-option-input" type="text" placeholder="e.g. A" aria-label="Add route" maxlength="4" />
+                  <button id="mobileRouteOptionAddBtn" class="route-option-add-btn" type="button">Add</button>
+                  <button id="mobileRouteOptionClearBtn" class="route-option-clear-btn" type="button">Clear</button>
+                </div>
+                <div id="mobileRouteOptionResult" class="route-option-result" hidden></div>
+              </section>
               <details class="settings-menu mobile-settings-menu" id="mobileSettingsMenu">
                 <summary class="settings-summary">
                   <svg class="settings-summary-icon" viewBox="0 0 24 24" aria-hidden="true">

@@ -30,6 +30,7 @@ const WARP_LINE_CURVE_TOLERANCE_PX = 1.1;
 const WARP_LINE_MAX_SUBDIVISION_DEPTH = 7;
 const DEFAULT_SWIM_METERS_PER_MINUTE = 28;
 const REACHABILITY_THRESHOLD_MINUTES = 60;
+const MAX_WALK_TO_STATION_MINUTES = 30;
 const SHARE_COORDINATE_DECIMALS = 5;
 const EMOJI_BURST_INTERVAL_MS = 90;
 const EMOJI_BURST_PER_TICK = 3;
@@ -53,8 +54,8 @@ const EMOJI_BURST_SETS = {
 const state = {
   data: null,
   ready: false,
-  showWarp: true,
-  showHeatmap: true,
+  showWarp: false,
+  showHeatmap: false,
   showReachOutline: false,
   showPinHint: true,
   isMobile: false,
@@ -85,6 +86,9 @@ const state = {
   travelSettings: null,
   travelSettingsDefaults: null,
   dynamicAdjacency: null,
+  routeStationIndex: null,
+  routeOption: [],
+  routeOptionResult: null,
   dirty: true,
 };
 
@@ -128,6 +132,30 @@ const mobileSheetToggle = document.getElementById("mobileSheetToggle");
 const mobileSheetBody = document.getElementById("mobileSheetBody");
 const mobileReachValue = document.getElementById("mobileReachValue");
 const mobileReachMeta = document.getElementById("mobileReachMeta");
+const nearestRoutePanel = document.getElementById("nearestRoutePanel");
+const nearestRouteMeta = document.getElementById("nearestRouteMeta");
+const nearestRouteTableBody = document.getElementById("nearestRouteTableBody");
+const mobileNearestRoutePanel = document.getElementById("mobileNearestRoutePanel");
+const mobileNearestRouteMeta = document.getElementById("mobileNearestRouteMeta");
+const mobileNearestRouteTableBody = document.getElementById("mobileNearestRouteTableBody");
+const probeRoutePanel = document.getElementById("probeRoutePanel");
+const probeRouteMeta = document.getElementById("probeRouteMeta");
+const probeRouteTableBody = document.getElementById("probeRouteTableBody");
+const mobileProbeRoutePanel = document.getElementById("mobileProbeRoutePanel");
+const mobileProbeRouteMeta = document.getElementById("mobileProbeRouteMeta");
+const mobileProbeRouteTableBody = document.getElementById("mobileProbeRouteTableBody");
+const routeOptionPanel = document.getElementById("routeOptionPanel");
+const routeOptionSequence = document.getElementById("routeOptionSequence");
+const routeOptionInput = document.getElementById("routeOptionInput");
+const routeOptionAddBtn = document.getElementById("routeOptionAddBtn");
+const routeOptionClearBtn = document.getElementById("routeOptionClearBtn");
+const routeOptionResult = document.getElementById("routeOptionResult");
+const mobileRouteOptionPanel = document.getElementById("mobileRouteOptionPanel");
+const mobileRouteOptionSequence = document.getElementById("mobileRouteOptionSequence");
+const mobileRouteOptionInput = document.getElementById("mobileRouteOptionInput");
+const mobileRouteOptionAddBtn = document.getElementById("mobileRouteOptionAddBtn");
+const mobileRouteOptionClearBtn = document.getElementById("mobileRouteOptionClearBtn");
+const mobileRouteOptionResult = document.getElementById("mobileRouteOptionResult");
 const mobileWarpToggle = document.getElementById("mobileWarpToggle");
 const mobileHeatmapToggle = document.getElementById("mobileHeatmapToggle");
 const mobileOutlineToggle = document.getElementById("mobileOutlineToggle");
@@ -1195,6 +1223,7 @@ function drawCityBasemap(
   }
 }
 
+// Maybe we can use this to display the stations.
 function drawStations(drawCtx, projectPoint) {
   for (const station of state.data.stations) {
     const [sx, sy] = projectPoint(station.point);
@@ -1281,6 +1310,7 @@ function drawWarpedBaseMap(drawCtx, width, height, warp, sourceTransform, destin
   drawCtx.restore();
 }
 
+// what is this?
 function buildDynamicAdjacency() {
   const defaults = state.travelSettingsDefaults || getTravelSettingsDefaults();
   const routeStates = state.data.routeStates;
@@ -1320,6 +1350,65 @@ function buildDynamicAdjacency() {
         walkPenalty,
       };
     });
+  });
+}
+
+function buildRouteStationIndex() {
+  const index = new Map();
+  for (let stationIndex = 0; stationIndex < state.data.stations.length; stationIndex += 1) {
+    for (const routeId of state.data.stations[stationIndex].routes) {
+      if (!index.has(routeId)) index.set(routeId, []);
+      index.get(routeId).push(stationIndex);
+    }
+  }
+  return index;
+}
+
+function sortRouteIds(routeIds) {
+  return [...routeIds].sort((a, b) => {
+    const aNum = /^\d/.test(a);
+    const bNum = /^\d/.test(b);
+    if (aNum && bNum) {
+      const aVal = parseInt(a, 10);
+      const bVal = parseInt(b, 10);
+      if (aVal !== bVal) return aVal - bVal;
+      return a.localeCompare(b);
+    }
+    if (aNum) return -1;
+    if (bNum) return 1;
+    return a.localeCompare(b);
+  });
+}
+
+function walkMinutesToStation(point, stationIndex) {
+  const settings = currentTravelSettings();
+  const station = state.data.stations[stationIndex];
+  return (
+    distance(point, station.point) / settings.walkingSpeed + state.data.meta.stationAccessPenalty
+  );
+}
+
+function nearestStationsByRoute(point) {
+  const stations = state.data.stations;
+  const routeIds = sortRouteIds(state.routeStationIndex.keys());
+  return routeIds.map((routeId) => {
+    let bestIndex = -1;
+    let bestWalkMinutes = Infinity;
+    for (const stationIndex of state.routeStationIndex.get(routeId)) {
+      const walkMinutes = walkMinutesToStation(point, stationIndex);
+      if (walkMinutes < bestWalkMinutes) {
+        bestWalkMinutes = walkMinutes;
+        bestIndex = stationIndex;
+      }
+    }
+    const reachable = bestWalkMinutes <= MAX_WALK_TO_STATION_MINUTES;
+    return {
+      routeId,
+      stationIndex: bestIndex,
+      stationName: stations[bestIndex].name,
+      walkMinutes: bestWalkMinutes,
+      reachable,
+    };
   });
 }
 
@@ -1412,6 +1501,268 @@ function estimateTravel(origin, originDistances, destinationPoint) {
   };
 }
 
+function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
+  if (!routeIds.length) return null;
+  const settings = currentTravelSettings();
+  const routeStates = state.data.routeStates;
+  const stations = state.data.stations;
+  const N = routeIds.length;
+
+  for (const routeId of routeIds) {
+    if (!state.routeStationIndex.has(routeId)) {
+      return { viable: false, reason: `Unknown route: ${routeId}` };
+    }
+  }
+
+  // Check walk from origin to first route
+  let bestEntryWalk = Infinity;
+  for (const si of state.routeStationIndex.get(routeIds[0])) {
+    const w = walkMinutesToStation(originPoint, si);
+    if (w < bestEntryWalk) bestEntryWalk = w;
+  }
+  if (bestEntryWalk > MAX_WALK_TO_STATION_MINUTES) {
+    return { viable: false, reason: `Origin is too far from any ${routeIds[0]} station (${formatMinutes(bestEntryWalk)} walk)` };
+  }
+
+  // Check walk from last route to destination
+  const destNormalized = normalizeTravelPoint(destinationPoint);
+  let bestExitWalk = Infinity;
+  for (const si of state.routeStationIndex.get(routeIds[N - 1])) {
+    const w = walkMinutesToStation(destinationPoint, si) + destNormalized.swimMinutes;
+    if (w < bestExitWalk) bestExitWalk = w;
+  }
+  if (bestExitWalk > MAX_WALK_TO_STATION_MINUTES) {
+    return { viable: false, reason: `Destination is too far from any ${routeIds[N - 1]} station (${formatMinutes(bestExitWalk)} walk)` };
+  }
+
+  // Constrained Dijkstra: state = (routeStateIndex, phaseIndex)
+  const rsCount = routeStates.length;
+  const totalNodes = rsCount * N;
+  const dist = new Float64Array(totalNodes).fill(Infinity);
+  const prev = new Int32Array(totalNodes).fill(-1);
+  const visited = new Uint8Array(totalNodes);
+
+  // Seed: all route states for routeIds[0] reachable from origin
+  for (const si of state.routeStationIndex.get(routeIds[0])) {
+    const w = walkMinutesToStation(originPoint, si);
+    if (w > MAX_WALK_TO_STATION_MINUTES) continue;
+    for (const rsi of state.data.stationStates[si] || []) {
+      if (routeStates[rsi].routeId !== routeIds[0]) continue;
+      const routeId = routeIds[0];
+      const boardingDelta =
+        (state.data.routeWaits?.[routeId] ?? state.travelSettingsDefaults.transitTime) -
+        state.travelSettingsDefaults.transitTime;
+      const d = w + settings.transitTime + boardingDelta;
+      const node = rsi * N + 0;
+      if (d < dist[node]) { dist[node] = d; }
+    }
+  }
+
+  // Dijkstra over (rsi, phase) nodes
+  for (let step = 0; step < totalNodes; step += 1) {
+    let current = -1;
+    let best = Infinity;
+    for (let i = 0; i < totalNodes; i += 1) {
+      if (!visited[i] && dist[i] < best) { best = dist[i]; current = i; }
+    }
+    if (current === -1) break;
+    visited[current] = 1;
+
+    const phase = current % N;
+    const rsi = (current - phase) / N;
+
+    for (const edge of state.dynamicAdjacency[rsi]) {
+      const toRsi = edge.toIndex;
+      const toRouteId = routeStates[toRsi].routeId;
+      let weight, toPhase;
+
+      if (edge.kind === "ride" && toRouteId === routeIds[phase]) {
+        weight = edge.rideMinutes;
+        toPhase = phase;
+      } else if (
+        phase + 1 < N &&
+        (edge.kind === "transfer" || edge.kind === "interchange") &&
+        toRouteId === routeIds[phase + 1]
+      ) {
+        weight =
+          edge.kind === "transfer"
+            ? settings.transferTime + settings.transitTime + edge.boardingDelta
+            : edge.walkDistance / settings.walkingSpeed +
+              edge.walkPenalty +
+              settings.transferTime +
+              settings.transitTime +
+              edge.boardingDelta;
+        toPhase = phase + 1;
+      } else {
+        continue;
+      }
+
+      const toNode = toRsi * N + toPhase;
+      const candidate = dist[current] + weight;
+      if (candidate < dist[toNode]) {
+        dist[toNode] = candidate;
+        prev[toNode] = current;
+      }
+    }
+  }
+
+  // Find best terminal: any (rsi, N-1) on last route + walk to destination
+  let bestTotal = Infinity;
+  let bestTerminalNode = -1;
+  let bestExitSi = -1;
+  for (const si of state.routeStationIndex.get(routeIds[N - 1])) {
+    const w = walkMinutesToStation(destinationPoint, si) + destNormalized.swimMinutes;
+    for (const rsi of state.data.stationStates[si] || []) {
+      if (routeStates[rsi].routeId !== routeIds[N - 1]) continue;
+      const node = rsi * N + (N - 1);
+      const total = dist[node] + w;
+      if (total < bestTotal) {
+        bestTotal = total;
+        bestTerminalNode = node;
+        bestExitSi = si;
+      }
+    }
+  }
+
+  if (!Number.isFinite(bestTotal)) {
+    // Determine which phase failed
+    for (let ph = 0; ph < N - 1; ph += 1) {
+      let anyReached = false;
+      for (let rsi = 0; rsi < rsCount; rsi += 1) {
+        if (dist[rsi * N + ph] < Infinity) { anyReached = true; break; }
+      }
+      if (!anyReached && ph > 0) {
+        return { viable: false, reason: `No transfer found between ${routeIds[ph - 1]} and ${routeIds[ph]}` };
+      }
+      let anyNext = false;
+      for (let rsi = 0; rsi < rsCount; rsi += 1) {
+        if (dist[rsi * N + ph + 1] < Infinity) { anyNext = true; break; }
+      }
+      if (!anyNext) {
+        return { viable: false, reason: `No transfer found between ${routeIds[ph]} and ${routeIds[ph + 1]}` };
+      }
+    }
+    return { viable: false, reason: "No viable path found" };
+  }
+
+  // Reconstruct path
+  const path = [];
+  let node = bestTerminalNode;
+  while (node !== -1) {
+    const ph = node % N;
+    const rsi = (node - ph) / N;
+    path.push({ rsi, phase: ph });
+    node = prev[node];
+  }
+  path.reverse();
+
+  // Build journey steps
+  const steps = [];
+  const pathStartSi = routeStates[path[0].rsi].stationIndex;
+  const pathStartWalk = walkMinutesToStation(originPoint, pathStartSi);
+  steps.push({ kind: "walk", stationName: stations[pathStartSi].name, minutes: pathStartWalk });
+
+  let lastPhase = 0;
+  let rideStartName = stations[pathStartSi].name;
+  let rideDist = 0;
+
+  for (let i = 1; i < path.length; i += 1) {
+    const { rsi, phase } = path[i];
+    const prevNode = path[i - 1].rsi * N + path[i - 1].phase;
+    const curNode = rsi * N + phase;
+    const edgeDist = dist[curNode] - dist[prevNode];
+
+    if (phase === lastPhase) {
+      rideDist += edgeDist;
+    } else {
+      // Phase transition — emit ride then transfer
+      const transferSi = routeStates[path[i - 1].rsi].stationIndex;
+      steps.push({ kind: "ride", routeId: routeIds[lastPhase], from: rideStartName, to: stations[transferSi].name, minutes: rideDist });
+      steps.push({ kind: "transfer", at: stations[transferSi].name, from: routeIds[lastPhase], to: routeIds[phase], minutes: edgeDist });
+      rideStartName = stations[routeStates[rsi].stationIndex].name;
+      rideDist = 0;
+      lastPhase = phase;
+    }
+  }
+
+  // Final ride segment
+  const exitStation = stations[bestExitSi];
+  steps.push({ kind: "ride", routeId: routeIds[N - 1], from: rideStartName, to: exitStation.name, minutes: rideDist });
+  steps.push({ kind: "walk", stationName: exitStation.name, minutes: bestExitWalk });
+
+  return { viable: true, steps, totalMinutes: bestTotal };
+}
+
+function syncRouteOptionPanel() {
+  const panels = [
+    { panel: routeOptionPanel, sequence: routeOptionSequence, result: routeOptionResult },
+    { panel: mobileRouteOptionPanel, sequence: mobileRouteOptionSequence, result: mobileRouteOptionResult },
+  ].filter(({ panel }) => panel);
+
+  for (const { sequence, result } of panels) {
+    if (sequence) {
+      if (state.routeOption.length === 0) {
+        sequence.innerHTML = '<span class="route-option-placeholder">No routes added yet</span>';
+      } else {
+        sequence.innerHTML = state.routeOption
+          .map((id, i) =>
+            (i > 0 ? '<span class="route-option-arrow" aria-hidden="true">→</span>' : "") +
+            renderRouteBadge(id),
+          )
+          .join("");
+      }
+    }
+
+    if (!result) continue;
+
+    if (!state.originPoint || !state.probePoint || state.routeOption.length === 0) {
+      result.hidden = true;
+      continue;
+    }
+
+    result.hidden = false;
+    const evaluation = evaluateRouteOption(state.originPoint, state.probePoint, state.routeOption);
+    state.routeOptionResult = evaluation;
+
+    if (!evaluation.viable) {
+      result.innerHTML = `<p class="route-option-unviable">${escapeHtml(evaluation.reason)}</p>`;
+      continue;
+    }
+
+    const stepsHtml = evaluation.steps.map((step) => {
+      if (step.kind === "walk") {
+        return `<li class="route-option-step route-option-step-walk">Walk ${formatMinutes(step.minutes)} to/from <strong>${escapeHtml(step.stationName)}</strong></li>`;
+      }
+      if (step.kind === "ride") {
+        return `<li class="route-option-step route-option-step-ride">${renderRouteBadge(step.routeId)} ${escapeHtml(step.from)} → <strong>${escapeHtml(step.to)}</strong> <span class="route-option-step-time">${formatMinutes(step.minutes)}</span></li>`;
+      }
+      if (step.kind === "transfer") {
+        return `<li class="route-option-step route-option-step-transfer">Transfer ${renderRouteBadge(step.from)} → ${renderRouteBadge(step.to)} at ${escapeHtml(step.at)} <span class="route-option-step-time">${formatMinutes(step.minutes)}</span></li>`;
+      }
+      return "";
+    }).join("");
+
+    result.innerHTML = `
+      <div class="route-option-total">Total: <strong>${formatMinutes(evaluation.totalMinutes)}</strong></div>
+      <ol class="route-option-steps">${stepsHtml}</ol>
+    `;
+  }
+}
+
+function addRouteOptionRoute(rawInput) {
+  const routeId = rawInput.trim().toUpperCase();
+  if (!routeId) return;
+  if (!state.routeStationIndex?.has(routeId)) return;
+  state.routeOption = [...state.routeOption, routeId];
+  syncRouteOptionPanel();
+}
+
+function clearRouteOption() {
+  state.routeOption = [];
+  state.routeOptionResult = null;
+  syncRouteOptionPanel();
+}
+
 function summarizeReachability(origin, originDistances) {
   const totalStations = state.data.stations.length;
   let reachableStations = 0;
@@ -1449,6 +1800,156 @@ function syncReachabilityScore(summary = null) {
   if (mobileReachValue && mobileReachMeta) {
     mobileReachValue.textContent = `${summary.reachableStations} / ${summary.totalStations}`;
     mobileReachMeta.textContent = `${percent}% of stations are reachable within ${REACHABILITY_THRESHOLD_MINUTES} minutes.`;
+  }
+}
+
+function renderRouteBadge(routeId) {
+  const style = state.data.routeStyles?.[routeId];
+  const label = style?.label ?? routeId;
+  const background = style?.color ?? "#5a6e84";
+  const color = style?.textColor ?? "#ffffff";
+  return `<span class="route-badge" style="background-color:${background};color:${color}">${escapeHtml(label)}</span>`;
+}
+
+function renderNearestRouteTableRows(rows) {
+  return rows
+    .map((row) => {
+      const rowClass = row.reachable ? "" : ' class="nearest-route-row-unreachable"';
+      const stationCell = row.reachable ? escapeHtml(row.stationName) : "—";
+      const walkCell = row.reachable ? formatMinutes(row.walkMinutes) : "—";
+      const statusCell = row.reachable ? "Reachable" : "Unreachable";
+      return `<tr${rowClass}><td>${renderRouteBadge(row.routeId)}</td><td>${stationCell}</td><td>${walkCell}</td><td>${statusCell}</td></tr>`;
+    })
+    .join("");
+}
+
+const tableSortState = new Map();
+const tableRowCache = new Map();
+
+function sortRows(rows, col, dir) {
+  const sorted = rows.slice();
+  sorted.sort((a, b) => {
+    let av, bv;
+    if (col === "line") {
+      [av, bv] = [a.routeId, b.routeId];
+      const aNum = /^\d/.test(av), bNum = /^\d/.test(bv);
+      if (aNum !== bNum) return dir * (aNum ? -1 : 1);
+      if (aNum && bNum) {
+        const diff = parseInt(av, 10) - parseInt(bv, 10);
+        if (diff !== 0) return dir * diff;
+      }
+      return dir * av.localeCompare(bv);
+    }
+    if (col === "station") {
+      av = a.reachable ? a.stationName : "￿";
+      bv = b.reachable ? b.stationName : "￿";
+      return dir * av.localeCompare(bv);
+    }
+    if (col === "walk") {
+      av = a.reachable ? a.walkMinutes : Infinity;
+      bv = b.reachable ? b.walkMinutes : Infinity;
+      return dir * (av - bv);
+    }
+    if (col === "status") {
+      av = a.reachable ? 0 : 1;
+      bv = b.reachable ? 0 : 1;
+      return dir * (av - bv);
+    }
+    return 0;
+  });
+  return sorted;
+}
+
+function syncSortIndicators(table, activeCol, dir) {
+  for (const th of table.querySelectorAll("th[data-sort-col]")) {
+    const col = th.dataset.sortCol;
+    if (col === activeCol) {
+      th.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
+    } else {
+      th.removeAttribute("aria-sort");
+    }
+  }
+}
+
+function initTableSort(tbody) {
+  const table = tbody.closest("table");
+  if (!table || table.dataset.sortInit) return;
+  table.dataset.sortInit = "1";
+  for (const th of table.querySelectorAll("th[data-sort-col]")) {
+    th.querySelector(".sort-th-btn")?.addEventListener("click", () => {
+      const col = th.dataset.sortCol;
+      const cur = tableSortState.get(tbody.id);
+      const dir = cur?.col === col ? -cur.dir : 1;
+      tableSortState.set(tbody.id, { col, dir });
+      syncSortIndicators(table, col, dir);
+      const rows = tableRowCache.get(tbody.id) ?? [];
+      tbody.innerHTML = renderNearestRouteTableRows(sortRows(rows, col, dir));
+    });
+  }
+}
+
+function populateRouteTableBody(tbody, rows) {
+  tableRowCache.set(tbody.id, rows);
+  initTableSort(tbody);
+  const sort = tableSortState.get(tbody.id);
+  const displayRows = sort ? sortRows(rows, sort.col, sort.dir) : rows;
+  tbody.innerHTML = renderNearestRouteTableRows(displayRows);
+  if (sort) {
+    const table = tbody.closest("table");
+    if (table) syncSortIndicators(table, sort.col, sort.dir);
+  }
+}
+
+function syncNearestRouteTable(originPoint) {
+  const panels = [
+    { panel: nearestRoutePanel, meta: nearestRouteMeta, tbody: nearestRouteTableBody },
+    { panel: mobileNearestRoutePanel, meta: mobileNearestRouteMeta, tbody: mobileNearestRouteTableBody },
+  ].filter(({ panel }) => panel);
+
+  if (!originPoint) {
+    for (const { panel, meta, tbody } of panels) {
+      panel.hidden = true;
+      if (meta) {
+        meta.textContent = "Pin an origin to see the nearest station for each subway line.";
+      }
+      if (tbody) tbody.innerHTML = "";
+    }
+    return;
+  }
+
+  const rows = nearestStationsByRoute(originPoint);
+  const reachableCount = rows.filter((row) => row.reachable).length;
+  const summary = `${reachableCount} of ${rows.length} lines within ${MAX_WALK_TO_STATION_MINUTES} min walk`;
+
+  for (const { panel, meta, tbody } of panels) {
+    panel.hidden = false;
+    if (meta) meta.textContent = summary;
+    if (tbody) populateRouteTableBody(tbody, rows);
+  }
+}
+
+function syncProbeRouteTable(probePoint) {
+  const panels = [
+    { panel: probeRoutePanel, meta: probeRouteMeta, tbody: probeRouteTableBody },
+    { panel: mobileProbeRoutePanel, meta: mobileProbeRouteMeta, tbody: mobileProbeRouteTableBody },
+  ].filter(({ panel }) => panel);
+
+  if (!probePoint) {
+    for (const { panel, tbody } of panels) {
+      panel.hidden = true;
+      if (tbody) tbody.innerHTML = "";
+    }
+    return;
+  }
+
+  const rows = nearestStationsByRoute(probePoint);
+  const reachableCount = rows.filter((row) => row.reachable).length;
+  const summary = `${reachableCount} of ${rows.length} lines within ${MAX_WALK_TO_STATION_MINUTES} min walk`;
+
+  for (const { panel, meta, tbody } of panels) {
+    panel.hidden = false;
+    if (meta) meta.textContent = summary;
+    if (tbody) populateRouteTableBody(tbody, rows);
   }
 }
 
@@ -1848,6 +2349,7 @@ function drawReachabilityOutline(drawCtx, warp, transform, useWarpGeometry = tru
   drawCtx.restore();
 }
 
+// Does most of the drawing.
 function drawMap(drawCtx, width, height) {
   drawPanelBackground(drawCtx, width, height);
   if (!state.transform) return;
@@ -1877,6 +2379,7 @@ function drawMap(drawCtx, width, height) {
       projectPoint,
     };
     syncReachabilityScore();
+    syncNearestRouteTable();
     syncMobileSheet();
     return;
   }
@@ -1933,6 +2436,7 @@ function drawMap(drawCtx, width, height) {
     projectPoint,
   };
   syncReachabilityScore(warp?.reachability ?? null);
+  syncNearestRouteTable(state.originPoint);
 
   drawExternalLand(drawCtx, externalLandProjectPoint);
   drawCityBasemap(drawCtx, projectPoint, {
@@ -1954,6 +2458,7 @@ function drawMap(drawCtx, width, height) {
   drawStations(drawCtx, projectPoint);
   drawBoroughLabels(drawCtx, projectPoint);
 
+  // Routing.
   if (state.originPoint) {
     const originScreen = projectPoint(state.originPoint);
     drawMarker(drawCtx, originScreen, "#d75c2e", 24, 5.5);
@@ -1975,6 +2480,7 @@ function drawMap(drawCtx, width, height) {
       ? null
       : state.cursorScreen;
   if (state.originPoint && activeProbePoint) {
+    // This is how the routing is done.
     const probe = measureProbeFromWarp(normalizedOrigin, warp, activeProbePoint);
     statusText.textContent = station ? `Pinned near ${station.name}` : "Pinned origin";
     if (probe && activeProbeScreen) {
@@ -2069,6 +2575,7 @@ function drawPinnedLabel(drawCtx, screenPoint, label, options = {}) {
   drawCtx.restore();
 }
 
+// Estimate the travel.
 function measureProbeFromWarp(normalizedOrigin, warp, probePoint) {
   if (!normalizedOrigin || !probePoint) return null;
   if (warp?.distances) {
@@ -2439,11 +2946,15 @@ function hitPinTarget(screenPoint, hitRadius = MOBILE_PIN_HIT_RADIUS) {
 function setProbePoint(worldPoint) {
   state.probePoint = worldPoint;
   state.probePinned = Boolean(worldPoint);
+  syncProbeRouteTable(worldPoint);
+  syncRouteOptionPanel();
 }
 
 function clearProbePoint() {
   state.probePoint = null;
   state.probePinned = false;
+  syncProbeRouteTable(null);
+  syncRouteOptionPanel();
   syncBrowserUrl();
 }
 
@@ -2659,6 +3170,7 @@ function setPinnedOrigin(worldPoint) {
   state.pinned = true;
   state.cursorPoint = worldPoint;
   syncBrowserUrl();
+  syncRouteOptionPanel();
   state.dirty = true;
   syncMobileSheet();
   requestDraw();
@@ -2674,6 +3186,7 @@ function clearPinnedOrigin() {
   state.originPoint = null;
   state.originLabel = null;
   syncBrowserUrl();
+  syncRouteOptionPanel();
   state.dirty = true;
   syncMobileSheet();
   requestDraw();
@@ -2746,6 +3259,7 @@ function lonLatToWorld(lon, lat) {
   return [lon * metersPerDegLon, lat * metersPerDegLat];
 }
 
+// How we might implement address and point to point mapping.
 async function searchAddress(query) {
   const params = new URLSearchParams({
     q: `${query}, New York City`,
@@ -2820,6 +3334,7 @@ async function init() {
   state.travelSettingsDefaults = getTravelSettingsDefaults();
   state.travelSettings = sanitizeTravelSettings(loadStoredTravelSettings(), state.travelSettingsDefaults);
   state.dynamicAdjacency = buildDynamicAdjacency();
+  state.routeStationIndex = buildRouteStationIndex();
   state.isMobile = isMobileLayout();
   state.baseMapCache = null;
   state.ready = true;
@@ -2868,6 +3383,8 @@ async function init() {
   warpToggle.checked = state.showWarp;
   heatmapToggle.checked = state.showHeatmap;
   outlineToggle.checked = state.showReachOutline;
+  syncProbeRouteTable(state.probePoint);
+  syncRouteOptionPanel();
   syncTravelSettingsInputs();
   syncHeatmapLegend();
   syncZoomControls();
@@ -3225,6 +3742,25 @@ async function init() {
   mobileHelpBubble.addEventListener("click", () => {
     expandMobileHelp();
   });
+
+  for (const [addBtn, input, clearBtn] of [
+    [routeOptionAddBtn, routeOptionInput, routeOptionClearBtn],
+    [mobileRouteOptionAddBtn, mobileRouteOptionInput, mobileRouteOptionClearBtn],
+  ]) {
+    if (!addBtn || !input || !clearBtn) continue;
+    const doAdd = () => {
+      addRouteOptionRoute(input.value);
+      input.value = "";
+      input.focus();
+    };
+    addBtn.addEventListener("click", doAdd);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); doAdd(); }
+    });
+    clearBtn.addEventListener("click", () => {
+      clearRouteOption();
+    });
+  }
 
   setupFooterEmojiBursts();
   syncFullscreenButton();
