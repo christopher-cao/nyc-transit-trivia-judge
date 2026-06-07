@@ -163,6 +163,8 @@
 
       <main class="workspace">
         <section class="panel-card accent">
+          <div class="panel-layout">
+          <div class="panel-sidebar">
           <div class="panel-header">
             <div>
               <h2>Commute-time warp</h2>
@@ -217,6 +219,83 @@
               </details>
             </div>
           </div>
+
+          <section class="sidebar-search-panel">
+            <form id="originSearchForm" class="sidebar-search-form" autocomplete="off">
+              <label class="sidebar-search-label" for="originAddressInput">Origin</label>
+              <div class="sidebar-search-row">
+                <input id="originAddressInput" name="originAddress" type="text" placeholder="Search an NYC address" autocomplete="off" />
+                <button id="originSearchButton" class="pin-button search-button" type="submit">Go</button>
+              </div>
+              <div id="originSearchMeta" class="search-meta" hidden></div>
+              <div id="originSearchResults" class="search-results" aria-live="polite"></div>
+            </form>
+            <form id="destSearchForm" class="sidebar-search-form" autocomplete="off" style="margin-top:12px">
+              <label class="sidebar-search-label" for="destAddressInput">Destination</label>
+              <div class="sidebar-search-row">
+                <input id="destAddressInput" name="destAddress" type="text" placeholder="Search an NYC address" autocomplete="off" />
+                <button id="destSearchButton" class="pin-button search-button" type="submit">Go</button>
+              </div>
+              <div id="destSearchMeta" class="search-meta" hidden></div>
+              <div id="destSearchResults" class="search-results" aria-live="polite"></div>
+            </form>
+          </section>
+          <section id="routeBuilderPanel" class="route-builder-panel" aria-live="polite">
+            <div class="route-builder-head">
+              <h3 class="route-builder-title">Route options</h3>
+              <div class="route-builder-actions">
+                <button id="undoRouteBtn" class="route-builder-undo-btn" type="button" hidden>← Undo</button>
+                <button id="addComparisonBtn" class="route-builder-add-btn" type="button" hidden>+ Compare</button>
+              </div>
+            </div>
+            <div id="routeComparisons" class="route-comparisons"></div>
+            <div id="routePalette" class="route-palette" aria-label="Route sticker palette"></div>
+          </section>
+          <section id="nearestRoutePanel" class="nearest-route-panel" aria-live="polite" hidden>
+            <div class="nearest-route-head">
+              <h3 class="nearest-route-title">Nearest station by line</h3>
+              <button class="nearest-route-collapse-btn" type="button" aria-label="Collapse table">▾</button>
+            </div>
+            <p id="nearestRouteMeta" class="nearest-route-meta">
+              Pin an origin to see the nearest station for each subway line.
+            </p>
+            <div class="nearest-route-table-wrap">
+              <table class="nearest-route-table">
+                <thead>
+                  <tr>
+                    <th scope="col" data-sort-col="line"><button class="sort-th-btn" type="button">Line<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="station"><button class="sort-th-btn" type="button">Nearest station<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="walk"><button class="sort-th-btn" type="button">Walk<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="status"><button class="sort-th-btn" type="button">Status<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                  </tr>
+                </thead>
+                <tbody id="nearestRouteTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+          <section id="probeRoutePanel" class="nearest-route-panel" aria-live="polite" hidden>
+            <div class="nearest-route-head">
+              <h3 class="nearest-route-title">Nearest station by line (destination)</h3>
+              <button class="nearest-route-collapse-btn" type="button" aria-label="Collapse table">▾</button>
+            </div>
+            <p id="probeRouteMeta" class="nearest-route-meta">
+              Pin a destination to see the nearest station for each subway line.
+            </p>
+            <div class="nearest-route-table-wrap">
+              <table class="nearest-route-table">
+                <thead>
+                  <tr>
+                    <th scope="col" data-sort-col="line"><button class="sort-th-btn" type="button">Line<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="station"><button class="sort-th-btn" type="button">Nearest station<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="walk"><button class="sort-th-btn" type="button">Walk<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                    <th scope="col" data-sort-col="status"><button class="sort-th-btn" type="button">Status<span class="sort-indicator" aria-hidden="true"></span></button></th>
+                  </tr>
+                </thead>
+                <tbody id="probeRouteTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+          </div><!-- /.panel-sidebar -->
           <div class="map-frame">
             <canvas id="mapCanvas" aria-label="Warped map of New York City by transit time"></canvas>
             <div class="map-zoom-controls" aria-label="Map zoom controls">
@@ -315,67 +394,17 @@
                 </div>
               </div>
             </div>
+            <div id="mapDistanceOverlay" class="map-distance-overlay" aria-live="polite" hidden>
+              <div id="mapDistanceOptimal" class="map-distance-pill map-distance-pill-optimal"></div>
+              <div id="mapDistanceRoute" class="map-distance-pill map-distance-pill-route" hidden></div>
+            </div>
             <div id="heatmapLegend" class="legend legend-overlay" aria-live="polite">
               <span id="heatmapLegendMin">0m</span>
               <div class="legend-scale" aria-hidden="true"></div>
               <span id="heatmapLegendMax">80m</span>
             </div>
           </div>
-          <section id="routeBuilderPanel" class="route-builder-panel" aria-live="polite">
-            <div class="route-builder-head">
-              <h3 class="route-builder-title">Route options</h3>
-              <div class="route-builder-actions">
-                <button id="undoRouteBtn" class="route-builder-undo-btn" type="button" hidden>← Undo</button>
-                <button id="addComparisonBtn" class="route-builder-add-btn" type="button" hidden>+ Compare</button>
-              </div>
-            </div>
-            <div id="routeComparisons" class="route-comparisons"></div>
-            <div id="routePalette" class="route-palette" aria-label="Route sticker palette"></div>
-          </section>
-          <section id="nearestRoutePanel" class="nearest-route-panel" aria-live="polite" hidden>
-            <div class="nearest-route-head">
-              <h3 class="nearest-route-title">Nearest station by line</h3>
-              <button class="nearest-route-collapse-btn" type="button" aria-label="Collapse table">▾</button>
-            </div>
-            <p id="nearestRouteMeta" class="nearest-route-meta">
-              Pin an origin to see the nearest station for each subway line.
-            </p>
-            <div class="nearest-route-table-wrap">
-              <table class="nearest-route-table">
-                <thead>
-                  <tr>
-                    <th scope="col" data-sort-col="line"><button class="sort-th-btn" type="button">Line<span class="sort-indicator" aria-hidden="true"></span></button></th>
-                    <th scope="col" data-sort-col="station"><button class="sort-th-btn" type="button">Nearest station<span class="sort-indicator" aria-hidden="true"></span></button></th>
-                    <th scope="col" data-sort-col="walk"><button class="sort-th-btn" type="button">Walk<span class="sort-indicator" aria-hidden="true"></span></button></th>
-                    <th scope="col" data-sort-col="status"><button class="sort-th-btn" type="button">Status<span class="sort-indicator" aria-hidden="true"></span></button></th>
-                  </tr>
-                </thead>
-                <tbody id="nearestRouteTableBody"></tbody>
-              </table>
-            </div>
-          </section>
-          <section id="probeRoutePanel" class="nearest-route-panel" aria-live="polite" hidden>
-            <div class="nearest-route-head">
-              <h3 class="nearest-route-title">Nearest station by line (destination)</h3>
-              <button class="nearest-route-collapse-btn" type="button" aria-label="Collapse table">▾</button>
-            </div>
-            <p id="probeRouteMeta" class="nearest-route-meta">
-              Pin a destination to see the nearest station for each subway line.
-            </p>
-            <div class="nearest-route-table-wrap">
-              <table class="nearest-route-table">
-                <thead>
-                  <tr>
-                    <th scope="col" data-sort-col="line"><button class="sort-th-btn" type="button">Line<span class="sort-indicator" aria-hidden="true"></span></button></th>
-                    <th scope="col" data-sort-col="station"><button class="sort-th-btn" type="button">Nearest station<span class="sort-indicator" aria-hidden="true"></span></button></th>
-                    <th scope="col" data-sort-col="walk"><button class="sort-th-btn" type="button">Walk<span class="sort-indicator" aria-hidden="true"></span></button></th>
-                    <th scope="col" data-sort-col="status"><button class="sort-th-btn" type="button">Status<span class="sort-indicator" aria-hidden="true"></span></button></th>
-                  </tr>
-                </thead>
-                <tbody id="probeRouteTableBody"></tbody>
-              </table>
-            </div>
-          </section>
+          </div><!-- /.panel-layout -->
           <section
             id="mobileSheet"
             class="mobile-sheet"

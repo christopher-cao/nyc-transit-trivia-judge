@@ -89,6 +89,7 @@ const state = {
   routeStationIndex: null,
   routeOptions: [[]],
   activeRouteOptionIndex: 0,
+  routeOptionEvals: [],
   dirty: true,
 };
 
@@ -121,6 +122,19 @@ const shareInstagramIcon = document.getElementById("shareInstagramIcon");
 const shareLinkedInIcon = document.getElementById("shareLinkedInIcon");
 const searchMeta = document.getElementById("searchMeta");
 const searchResults = document.getElementById("searchResults");
+const originSearchForm = document.getElementById("originSearchForm");
+const originAddressInput = document.getElementById("originAddressInput");
+const originSearchButton = document.getElementById("originSearchButton");
+const originSearchMeta = document.getElementById("originSearchMeta");
+const originSearchResults = document.getElementById("originSearchResults");
+const destSearchForm = document.getElementById("destSearchForm");
+const destAddressInput = document.getElementById("destAddressInput");
+const destSearchButton = document.getElementById("destSearchButton");
+const destSearchMeta = document.getElementById("destSearchMeta");
+const destSearchResults = document.getElementById("destSearchResults");
+const mapDistanceOverlay = document.getElementById("mapDistanceOverlay");
+const mapDistanceOptimal = document.getElementById("mapDistanceOptimal");
+const mapDistanceRoute = document.getElementById("mapDistanceRoute");
 const reachScoreCard = document.getElementById("reachScoreCard");
 const reachScoreValue = document.getElementById("reachScoreValue");
 const reachScoreMeta = document.getElementById("reachScoreMeta");
@@ -1662,7 +1676,8 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
 
   let lastPhase = 0;
   let rideStartName = stations[pathStartSi].name;
-  let rideDist = 0;
+  // seed dist includes boarding wait; carry it forward into the first ride segment
+  let rideDist = dist[path[0].rsi * N + path[0].phase] - pathStartWalk;
 
   for (let i = 1; i < path.length; i += 1) {
     const { rsi, phase } = path[i];
@@ -1685,15 +1700,25 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
 
   // Final ride segment
   const exitStation = stations[bestExitSi];
+  const actualExitWalk = walkMinutesToStation(destinationPoint, bestExitSi) + destNormalized.swimMinutes;
   steps.push({ kind: "ride", routeId: routeIds[N - 1], from: rideStartName, to: exitStation.name, minutes: rideDist });
-  steps.push({ kind: "walk", stationName: exitStation.name, minutes: bestExitWalk });
+  steps.push({ kind: "walk", stationName: exitStation.name, minutes: actualExitWalk });
 
-  return { viable: true, steps, totalMinutes: bestTotal };
+  // Key station indices: entry, each transfer, exit
+  const pathStationIndices = [routeStates[path[0].rsi].stationIndex];
+  for (let i = 1; i < path.length; i += 1) {
+    if (path[i].phase !== path[i - 1].phase) {
+      pathStationIndices.push(routeStates[path[i - 1].rsi].stationIndex);
+    }
+  }
+  pathStationIndices.push(bestExitSi);
+
+  return { viable: true, steps, totalMinutes: bestTotal, pathStationIndices, routeIds };
 }
 
-function renderComparisonResult(seq) {
+function renderComparisonResult(seq, i) {
   if (!state.originPoint || !state.probePoint || seq.length === 0) return "";
-  const ev = evaluateRouteOption(state.originPoint, state.probePoint, seq);
+  const ev = state.routeOptionEvals[i] ?? evaluateRouteOption(state.originPoint, state.probePoint, seq);
   if (!ev.viable) {
     return `<p class="route-comparison-unviable">${escapeHtml(ev.reason)}</p>`;
   }
@@ -1724,7 +1749,7 @@ function renderComparisonRows() {
           (j > 0 ? '<span class="route-comparison-arrow" aria-hidden="true">→</span>' : "") +
           renderRouteBadge(id),
         ).join("");
-    const resultHtml = renderComparisonResult(seq);
+    const resultHtml = renderComparisonResult(seq, i);
     return `
       <div class="route-comparison${isActive ? " is-active" : ""}" data-index="${i}">
         <div class="route-comparison-head">
@@ -1742,6 +1767,16 @@ function renderComparisonRows() {
 function syncRouteBuilderPanel() {
   const activeSeq = state.routeOptions[state.activeRouteOptionIndex] ?? [];
   const hasActiveRoutes = activeSeq.length > 0;
+
+  if (state.originPoint && state.probePoint) {
+    state.routeOptionEvals = state.routeOptions.map((seq) =>
+      seq.length > 0 ? evaluateRouteOption(state.originPoint, state.probePoint, seq) : null
+    );
+  } else {
+    state.routeOptionEvals = state.routeOptions.map(() => null);
+  }
+  state.dirty = true;
+  requestDraw();
 
   for (const [comparisonsEl, undoBtn, addBtn] of [
     [routeComparisons, undoRouteBtn, addComparisonBtn],
@@ -2516,6 +2551,8 @@ function drawMap(drawCtx, width, height) {
     drawMarker(drawCtx, state.cursorScreen, "#17304d", 18, 4.3, 0.18);
   }
 
+  drawRoutePath(drawCtx, projectPoint);
+
   const activeProbePoint = state.probePoint || (state.isMobile ? null : state.cursorPoint);
   const activeProbeScreen = state.probePoint
     ? projectPoint(state.probePoint)
@@ -2526,10 +2563,22 @@ function drawMap(drawCtx, width, height) {
     // This is how the routing is done.
     const probe = measureProbeFromWarp(normalizedOrigin, warp, activeProbePoint);
     statusText.textContent = station ? `Pinned near ${station.name}` : "Pinned origin";
-    if (probe && activeProbeScreen) {
-      drawHoverTooltip(drawCtx, activeProbeScreen, formatDistanceLabel(probe.baseMinutes, probe.swimMinutes));
+    if (probe) {
+      mapDistanceOverlay.hidden = false;
+      mapDistanceOptimal.textContent = `✨ Optimal: ${formatDistanceLabel(probe.baseMinutes, probe.swimMinutes)}`;
+      const activeEval = state.routeOptionEvals?.[state.activeRouteOptionIndex];
+      if (activeEval?.viable) {
+        const walkMins = activeEval.steps.filter(s => s.kind === "walk").reduce((a, s) => a + s.minutes, 0);
+        const rideMins = activeEval.steps.filter(s => s.kind === "ride").reduce((a, s) => a + s.minutes, 0);
+        const seq = activeEval.routeIds;
+        mapDistanceRoute.textContent = `🚆 ${seq.join("→")}: ${formatMinutes(activeEval.totalMinutes)} (${Math.round(rideMins)}m train + ${Math.round(walkMins)}m walk)`;
+        mapDistanceRoute.hidden = false;
+      } else {
+        mapDistanceRoute.hidden = true;
+      }
     }
   } else {
+    mapDistanceOverlay.hidden = true;
     statusText.textContent = station
       ? `${state.showWarp ? "Warped" : "Shown"} from near ${station.name}`
       : state.showWarp
@@ -2537,6 +2586,26 @@ function drawMap(drawCtx, width, height) {
         : "Geographic commute-time view";
   }
   syncMobileSheet();
+}
+
+function drawRoutePath(drawCtx, projectPoint) {
+  const activeEval = state.routeOptionEvals?.[state.activeRouteOptionIndex];
+  if (!activeEval?.viable || !activeEval.pathStationIndices?.length) return;
+  const indices = activeEval.pathStationIndices;
+  const last = indices.length - 1;
+  drawCtx.save();
+  drawCtx.font = "18px serif";
+  drawCtx.textAlign = "center";
+  drawCtx.textBaseline = "middle";
+  for (let k = 0; k <= last; k++) {
+    const si = indices[k];
+    const station = state.data.stations[si];
+    if (!station) continue;
+    const [sx, sy] = projectPoint(station.point);
+    const emoji = k === 0 ? "🚶" : k === last ? "🏁" : "🔄";
+    drawCtx.fillText(emoji, sx, sy);
+  }
+  drawCtx.restore();
 }
 
 function drawMarker(drawCtx, screenPoint, color, glowRadius, radius, glowAlpha = 0.5) {
@@ -2560,6 +2629,7 @@ function drawMarker(drawCtx, screenPoint, color, glowRadius, radius, glowAlpha =
   drawCtx.strokeStyle = color;
   drawCtx.stroke();
 }
+
 
 function drawHoverTooltip(drawCtx, screenPoint, label) {
   const [sx, sy] = screenPoint;
@@ -3710,6 +3780,105 @@ async function init() {
       }
     });
   }
+
+  originSearchForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const query = originAddressInput.value.trim();
+    if (!query) {
+      originSearchMeta.hidden = false;
+      originSearchMeta.textContent = "Enter an NYC address to search.";
+      originSearchResults.innerHTML = "";
+      return;
+    }
+    originSearchButton.disabled = true;
+    originSearchMeta.hidden = false;
+    originSearchMeta.textContent = "Looking up address…";
+    originSearchResults.innerHTML = "";
+    try {
+      const results = await searchAddress(query);
+      if (!results.length) {
+        originSearchMeta.textContent = "No NYC address matches found.";
+        return;
+      }
+      originSearchMeta.textContent = "Choose a result to pin the origin.";
+      originSearchResults.innerHTML = results.map((r, idx) => `
+        <button class="search-result" type="button" data-result-index="${idx}">
+          <strong>${escapeHtml(r.title)}</strong>
+          <span>${escapeHtml(r.subtitle)}</span>
+        </button>
+      `).join("");
+      for (const btn of originSearchResults.querySelectorAll(".search-result")) {
+        btn.addEventListener("click", () => {
+          const result = results[Number(btn.dataset.resultIndex)];
+          const worldPoint = lonLatToWorld(result.lon, result.lat);
+          if (!withinBounds(worldPoint)) {
+            originSearchMeta.textContent = "That result fell outside the current NYC map bounds.";
+            return;
+          }
+          originAddressInput.value = result.title;
+          originSearchMeta.textContent = `Origin pinned to ${result.title}.`;
+          originSearchResults.innerHTML = "";
+          state.originLabel = shortOriginLabel(result.title);
+          setPinnedOrigin(worldPoint);
+          setAddressInputs(result.title);
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      originSearchMeta.textContent = "Address lookup failed. Try a more specific NYC address.";
+    } finally {
+      originSearchButton.disabled = false;
+    }
+  });
+
+  destSearchForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const query = destAddressInput.value.trim();
+    if (!query) {
+      destSearchMeta.hidden = false;
+      destSearchMeta.textContent = "Enter an NYC address to search.";
+      destSearchResults.innerHTML = "";
+      return;
+    }
+    destSearchButton.disabled = true;
+    destSearchMeta.hidden = false;
+    destSearchMeta.textContent = "Looking up address…";
+    destSearchResults.innerHTML = "";
+    try {
+      const results = await searchAddress(query);
+      if (!results.length) {
+        destSearchMeta.textContent = "No NYC address matches found.";
+        return;
+      }
+      destSearchMeta.textContent = "Choose a result to pin the destination.";
+      destSearchResults.innerHTML = results.map((r, idx) => `
+        <button class="search-result" type="button" data-result-index="${idx}">
+          <strong>${escapeHtml(r.title)}</strong>
+          <span>${escapeHtml(r.subtitle)}</span>
+        </button>
+      `).join("");
+      for (const btn of destSearchResults.querySelectorAll(".search-result")) {
+        btn.addEventListener("click", () => {
+          const result = results[Number(btn.dataset.resultIndex)];
+          const worldPoint = lonLatToWorld(result.lon, result.lat);
+          if (!withinBounds(worldPoint)) {
+            destSearchMeta.textContent = "That result fell outside the current NYC map bounds.";
+            return;
+          }
+          destAddressInput.value = result.title;
+          destSearchMeta.textContent = `Destination pinned to ${result.title}.`;
+          destSearchResults.innerHTML = "";
+          setProbePoint(worldPoint);
+          syncBrowserUrl();
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      destSearchMeta.textContent = "Address lookup failed. Try a more specific NYC address.";
+    } finally {
+      destSearchButton.disabled = false;
+    }
+  });
 
   mobileClearButton.addEventListener("click", () => {
     clearPinnedOrigin();
