@@ -63,10 +63,16 @@ const state = {
   mobileHelpCollapsed: false,
   viewportScale: 1,
   viewportCenter: null,
+  panOffsetPx: [0, 0],
+  panStartScreen: null,
+  panBaseOffset: null,
+  placingDestination: false,
+  placingOrigin: false,
   cursorPoint: null,
   cursorScreen: null,
   originPoint: null,
   originLabel: null,
+  probeLabel: null,
   pinnedPoint: null,
   pinnedScreen: null,
   pinned: false,
@@ -135,6 +141,10 @@ const destAddressInput = document.getElementById("destAddressInput");
 const destSearchButton = document.getElementById("destSearchButton");
 const destSearchMeta = document.getElementById("destSearchMeta");
 const destSearchResults = document.getElementById("destSearchResults");
+const setDestinationBtn = document.getElementById("setDestinationBtn");
+const setOriginBtn = document.getElementById("setOriginBtn");
+const clearOriginBtn = document.getElementById("clearOriginBtn");
+const clearDestBtn = document.getElementById("clearDestBtn");
 const timePickerInput = document.getElementById("timePickerInput");
 const clearTimeBtn = document.getElementById("clearTimeBtn");
 const mapDistanceOverlay = document.getElementById("mapDistanceOverlay");
@@ -164,6 +174,7 @@ const mobileProbeRoutePanel = document.getElementById("mobileProbeRoutePanel");
 const mobileProbeRouteMeta = document.getElementById("mobileProbeRouteMeta");
 const mobileProbeRouteTableBody = document.getElementById("mobileProbeRouteTableBody");
 const routeBuilderPanel = document.getElementById("routeBuilderPanel");
+const optimalAccordionContainer = document.getElementById("optimalAccordionContainer");
 const routeComparisons = document.getElementById("routeComparisons");
 const routePalette = document.getElementById("routePalette");
 const addComparisonBtn = document.getElementById("addComparisonBtn");
@@ -349,7 +360,7 @@ function applyTravelSettings(nextSettings, { persist = true } = {}) {
 
 function canShowEmojiBursts() {
   if (!emojiBurstState.mediaQuery) {
-    emojiBurstState.mediaQuery = window.matchMedia("(hover: hover) and (pointer: fine) and (min-width: 641px)");
+    emojiBurstState.mediaQuery = window.matchMedia("(hover: hover) and (pointer: fine) and (min-width: 481px)");
   }
   return emojiBurstState.mediaQuery.matches;
 }
@@ -465,7 +476,7 @@ function setupFooterEmojiBursts() {
   }
 
   if (!emojiBurstState.mediaQuery) {
-    emojiBurstState.mediaQuery = window.matchMedia("(hover: hover) and (pointer: fine) and (min-width: 641px)");
+    emojiBurstState.mediaQuery = window.matchMedia("(hover: hover) and (pointer: fine) and (min-width: 481px)");
   }
   emojiBurstState.mediaQuery.addEventListener("change", () => {
     if (!emojiBurstState.mediaQuery.matches) {
@@ -657,7 +668,7 @@ function formatShareTime(date = new Date()) {
 }
 
 function isMobileLayout() {
-  return window.matchMedia("(max-width: 640px)").matches;
+  return window.matchMedia("(max-width: 480px)").matches;
 }
 
 function setDrawerCollapsed(collapsed) {
@@ -1482,10 +1493,10 @@ function runDijkstra(origin) {
         const dep = nextDeparture(routeStateIndex, queryTime + arrivalAtStation);
         waitMinutes = dep === Infinity ? Infinity : dep - (queryTime + arrivalAtStation);
       } else {
-      const routeId = state.data.routeStates[routeStateIndex].routeId;
-      const boardingDelta =
-        (state.data.routeWaits?.[routeId] ?? state.travelSettingsDefaults.transitTime) -
-        state.travelSettingsDefaults.transitTime;
+        const routeId = state.data.routeStates[routeStateIndex].routeId;
+        const boardingDelta =
+          (state.data.routeWaits?.[routeId] ?? state.travelSettingsDefaults.transitTime) -
+          state.travelSettingsDefaults.transitTime;
         waitMinutes = settings.transitTime + boardingDelta;
       }
       distances[routeStateIndex] = Math.min(
@@ -1519,15 +1530,15 @@ function runDijkstra(origin) {
         weight = walkTime + transferPenalty + boardingWait;
       } else {
         weight =
-        edge.kind === "ride"
-          ? edge.rideMinutes
-          : edge.kind === "transfer"
-            ? settings.transferTime + settings.transitTime + edge.boardingDelta
-            : edge.walkDistance / settings.walkingSpeed +
-              edge.walkPenalty +
-              settings.transferTime +
-              settings.transitTime +
-              edge.boardingDelta;
+          edge.kind === "ride"
+            ? edge.rideMinutes
+            : edge.kind === "transfer"
+              ? settings.transferTime + settings.transitTime + edge.boardingDelta
+              : edge.walkDistance / settings.walkingSpeed +
+                edge.walkPenalty +
+                settings.transferTime +
+                settings.transitTime +
+                edge.boardingDelta;
       }
       const nextIndex = edge.toIndex;
       const candidate = distances[current] + weight;
@@ -1695,9 +1706,9 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
         const dep = nextDeparture(rsi, queryTime + w);
         waitMinutes = dep === Infinity ? Infinity : dep - (queryTime + w);
       } else {
-      const boardingDelta =
+        const boardingDelta =
           (state.data.routeWaits?.[routeIds[0]] ?? state.travelSettingsDefaults.transitTime) -
-        state.travelSettingsDefaults.transitTime;
+          state.travelSettingsDefaults.transitTime;
         waitMinutes = settings.transitTime + boardingDelta;
       }
       const d = w + waitMinutes;
@@ -2618,13 +2629,11 @@ function drawMap(drawCtx, width, height) {
     drawCityBasemap(drawCtx, projectPoint);
     drawStations(drawCtx, projectPoint);
     drawBoroughLabels(drawCtx, projectPoint);
-    if (state.cursorScreen) {
-      drawMarker(drawCtx, state.cursorScreen, "#d75c2e", 24, 5.5);
+    if (state.cursorScreen && state.placingOrigin) {
+      drawEmojiMarker(drawCtx, ...state.cursorScreen, "📍", 22);
     }
 
-    statusText.textContent = state.cursorScreen
-      ? "Release to pin the origin."
-      : "Drag on the map to place an origin.";
+    statusText.textContent = "Click \"Set origin\" to place your starting point.";
     state.currentRender = {
       warp: {
         inverseWarpPoint: (point) => point,
@@ -2644,6 +2653,7 @@ function drawMap(drawCtx, width, height) {
 
   const normalizedOrigin = normalizeTravelPoint(state.originPoint);
   const warp = computeWarp(normalizedOrigin);
+  state.latestWarp = warp;
   const baseTransform = state.transform;
   const warpPoint = state.showWarp && warp ? warp.warpPoint : (point) => point;
   const inverseWarpPoint = warp ? warp.inverseWarpPoint : (point) => point;
@@ -2671,7 +2681,7 @@ function drawMap(drawCtx, width, height) {
   const maxDy = height - PANEL_PADDING - bottomBound;
   const dx = zoomFocusPoint ? desiredDx : clampToRange(desiredDx, minDx, maxDx);
   const dy = zoomFocusPoint ? desiredDy : clampToRange(desiredDy, minDy, maxDy);
-  const transform = offsetTransform(baseTransform, dx, dy);
+  const transform = offsetTransform(baseTransform, dx + state.panOffsetPx[0], dy + state.panOffsetPx[1]);
   const projectPoint = (point) => transform.toScreen(warpPoint(point));
   const externalLandProjectPoint = (point) => transform.toScreen(point);
   const lineCurveOptions = state.showWarp
@@ -2695,6 +2705,12 @@ function drawMap(drawCtx, width, height) {
   };
   syncReachabilityScore(warp?.reachability ?? null);
   syncNearestRouteTable(state.originPoint);
+  if (state.probePoint && warp) {
+    state.optimalPathResult = traceOptimalPath(normalizedOrigin, warp, state.probePoint);
+  } else {
+    state.optimalPathResult = null;
+  }
+  if (optimalAccordionContainer) optimalAccordionContainer.innerHTML = renderOptimalPathAccordion();
 
   drawExternalLand(drawCtx, externalLandProjectPoint);
   drawCityBasemap(drawCtx, projectPoint, {
@@ -2719,16 +2735,16 @@ function drawMap(drawCtx, width, height) {
   // Routing.
   if (state.originPoint) {
     const originScreen = projectPoint(state.originPoint);
-    drawMarker(drawCtx, originScreen, "#d75c2e", 24, 5.5);
+    drawEmojiMarker(drawCtx, ...originScreen, "📍", 26);
     drawPinnedLabel(drawCtx, originScreen, currentOriginSummary(station?.name ?? "NYC subway"));
-  } else if (state.cursorScreen) {
-    drawMarker(drawCtx, state.cursorScreen, "#d75c2e", 24, 5.5);
+  } else if (state.cursorScreen && state.placingOrigin) {
+    drawEmojiMarker(drawCtx, ...state.cursorScreen, "📍", 22);
   }
 
   if (state.probePoint) {
-    drawMarker(drawCtx, projectPoint(state.probePoint), "#17304d", 18, 4.3, 0.18);
-  } else if (state.pinned && state.cursorScreen) {
-    drawMarker(drawCtx, state.cursorScreen, "#17304d", 18, 4.3, 0.18);
+    drawEmojiMarker(drawCtx, ...projectPoint(state.probePoint), "🎯", 26);
+  } else if (state.cursorScreen && (state.placingDestination || state.mobileDragTarget === "new-probe")) {
+    drawEmojiMarker(drawCtx, ...state.cursorScreen, "🎯", 22);
   }
 
   drawRoutePath(drawCtx, projectPoint);
@@ -2773,18 +2789,29 @@ function drawRoutePath(drawCtx, projectPoint) {
   if (!activeEval?.viable || !activeEval.pathStationIndices?.length) return;
   const indices = activeEval.pathStationIndices;
   const last = indices.length - 1;
-  drawCtx.save();
-  drawCtx.font = "18px serif";
-  drawCtx.textAlign = "center";
-  drawCtx.textBaseline = "middle";
   for (let k = 0; k <= last; k++) {
     const si = indices[k];
     const station = state.data.stations[si];
     if (!station) continue;
     const [sx, sy] = projectPoint(station.point);
     const emoji = k === 0 ? "🚶" : k === last ? "🏁" : "🔄";
-    drawCtx.fillText(emoji, sx, sy);
+    drawEmojiMarker(drawCtx, sx, sy, emoji, 18);
   }
+}
+
+function drawEmojiMarker(drawCtx, sx, sy, emoji, size = 20) {
+  drawCtx.save();
+  drawCtx.font = `${size}px serif`;
+  drawCtx.textAlign = "center";
+  drawCtx.textBaseline = "middle";
+  drawCtx.shadowColor = "white";
+  drawCtx.shadowBlur = 10;
+  // Draw twice to build up the white halo
+  drawCtx.fillText(emoji, sx, sy);
+  drawCtx.fillText(emoji, sx, sy);
+  // Clean pass on top
+  drawCtx.shadowBlur = 0;
+  drawCtx.fillText(emoji, sx, sy);
   drawCtx.restore();
 }
 
@@ -2891,6 +2918,60 @@ function measureProbeFromWarp(normalizedOrigin, warp, probePoint) {
 function roundRectPath(drawCtx, x, y, width, height, radius) {
   drawCtx.beginPath();
   drawCtx.roundRect(x, y, width, height, radius);
+}
+
+function formatCoordLabel(point) {
+  if (!point) return null;
+  const { lon, lat } = worldToLonLat(point);
+  return `${lat.toFixed(4)}°N, ${Math.abs(lon).toFixed(4)}°W`;
+}
+
+function setPlacingOrigin(active) {
+  state.placingOrigin = active;
+  if (active && state.placingDestination) {
+    state.placingDestination = false;
+    if (setDestinationBtn) { setDestinationBtn.classList.remove("active"); setDestinationBtn.textContent = "Map"; }
+    mapCanvas.classList.remove("placing-dest");
+  }
+  if (setOriginBtn) {
+    setOriginBtn.classList.toggle("active", active);
+    setOriginBtn.textContent = active ? "✕" : "Map";
+  }
+  mapCanvas.classList.toggle("placing-origin", active);
+}
+
+function setPlacingDestination(active) {
+  state.placingDestination = active;
+  if (active && state.placingOrigin) {
+    state.placingOrigin = false;
+    if (setOriginBtn) { setOriginBtn.classList.remove("active"); setOriginBtn.textContent = "Map"; }
+    mapCanvas.classList.remove("placing-origin");
+  }
+  if (setDestinationBtn) {
+    setDestinationBtn.classList.toggle("active", active);
+    setDestinationBtn.textContent = active ? "✕" : "Map";
+  }
+  mapCanvas.classList.toggle("placing-dest", active);
+}
+
+function syncPinSummary() {
+  if (!state.data) return;
+  const hasOrigin = Boolean(state.originPoint);
+  const hasProbe = Boolean(state.probePoint);
+
+  if (originAddressInput && document.activeElement !== originAddressInput) {
+    originAddressInput.value = hasOrigin
+      ? (state.originLabel || formatCoordLabel(state.originPoint))
+      : "";
+  }
+  if (destAddressInput && document.activeElement !== destAddressInput) {
+    destAddressInput.value = hasProbe
+      ? (state.probeLabel || formatCoordLabel(state.probePoint))
+      : "";
+  }
+  if (clearOriginBtn) clearOriginBtn.hidden = !hasOrigin;
+  if (clearDestBtn) clearDestBtn.hidden = !hasProbe;
+  if (setDestinationBtn) setDestinationBtn.hidden = !hasOrigin;
 }
 
 function currentOriginSummary(fallbackStationName = "NYC subway") {
@@ -3187,6 +3268,7 @@ function setViewportScale(nextScale) {
   const clampedScale = clamp(nextScale, MIN_VIEWPORT_SCALE, MAX_VIEWPORT_SCALE);
   state.viewportScale = clampedScale;
   state.viewportCenter = clampedScale > MIN_VIEWPORT_SCALE ? currentZoomFocusPoint() : null;
+  state.panOffsetPx = [0, 0];
   state.pinnedScreen = null;
   syncBrowserUrl();
   updateViewportTransform();
@@ -3241,35 +3323,57 @@ function setProbePoint(worldPoint) {
   state.probePinned = Boolean(worldPoint);
   syncProbeRouteTable(worldPoint);
   syncRouteBuilderPanel();
+  syncPinSummary();
 }
 
 function clearProbePoint() {
   state.probePoint = null;
   state.probePinned = false;
+  state.probeLabel = null;
   syncProbeRouteTable(null);
   syncRouteBuilderPanel();
   syncBrowserUrl();
+  syncPinSummary();
 }
 
 function beginPinGesture(pointerId, screenPoint, worldPoint, hitRadius) {
   state.mobilePointerId = pointerId;
   state.mobileGestureStartScreen = screenPoint;
   state.mobileGestureMoved = false;
-  state.mobileDragTarget = hitPinTarget(screenPoint, hitRadius) || (!state.originPoint ? "new-origin" : "new-probe");
 
-  if (state.mobileDragTarget === "origin" || state.mobileDragTarget === "new-origin") {
+  const hitTarget = hitPinTarget(screenPoint, hitRadius);
+  if (hitTarget) {
+    state.mobileDragTarget = hitTarget;
+    if (hitTarget === "origin") {
+      state.originLabel = null;
+      state.originPoint = worldPoint;
+      state.pinned = true;
+    } else if (hitTarget === "probe") {
+      setProbePoint(worldPoint);
+    }
+    state.cursorScreen = screenPoint;
+    state.cursorPoint = worldPoint;
+  } else if (state.placingOrigin) {
+    state.mobileDragTarget = "new-origin";
     state.originLabel = null;
     state.originPoint = worldPoint;
-    state.pinned = state.mobileDragTarget === "origin" ? true : false;
-    if (state.mobileDragTarget === "new-origin") {
-      clearProbePoint();
-    }
-  } else if (state.mobileDragTarget === "probe" || state.mobileDragTarget === "new-probe") {
+    state.pinned = false;
+    clearProbePoint();
+    setPlacingOrigin(false);
+    state.cursorScreen = screenPoint;
+    state.cursorPoint = worldPoint;
+  } else if (state.placingDestination) {
+    state.mobileDragTarget = "new-probe";
     setProbePoint(worldPoint);
+    setPlacingDestination(false);
+    state.cursorScreen = screenPoint;
+    state.cursorPoint = worldPoint;
+  } else {
+    state.mobileDragTarget = "pan";
+    state.panStartScreen = screenPoint;
+    state.panBaseOffset = state.panOffsetPx.slice();
   }
 
-  state.cursorScreen = screenPoint;
-  state.cursorPoint = worldPoint;
   state.showPinHint = false;
   state.dirty = true;
 }
@@ -3278,6 +3382,17 @@ function updatePinGesture(screenPoint, worldPoint, tapSlop) {
   state.mobileGestureMoved =
     state.mobileGestureMoved ||
     screenDistance(state.mobileGestureStartScreen || screenPoint, screenPoint) > tapSlop;
+
+  if (state.mobileDragTarget === "pan") {
+    state.panOffsetPx = [
+      state.panBaseOffset[0] + screenPoint[0] - state.panStartScreen[0],
+      state.panBaseOffset[1] + screenPoint[1] - state.panStartScreen[1],
+    ];
+    state.dirty = true;
+    requestDraw();
+    return;
+  }
+
   state.cursorScreen = screenPoint;
   state.cursorPoint = worldPoint;
 
@@ -3323,6 +3438,12 @@ function handleMobilePointerUp(event) {
 
   const dragTarget = state.mobileDragTarget;
   const moved = state.mobileGestureMoved;
+
+  if (dragTarget === "pan") {
+    try { mapCanvas.releasePointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+    resetMobileGestureState();
+    return;
+  }
 
   if (dragTarget === "origin" && !moved) {
     clearPinnedOrigin();
@@ -3378,10 +3499,26 @@ function handleDesktopPointerDown(event) {
 
 function handleDesktopPointerMove(event) {
   if (state.isMobile) return;
-  if (state.mobilePointerId !== event.pointerId || !state.mobileDragTarget) return;
-  const { screenPoint, worldPoint } = pointerToWorld(event);
-  if (!withinBounds(worldPoint)) return;
-  updatePinGesture(screenPoint, worldPoint, DESKTOP_PIN_TAP_SLOP);
+  // Active gesture
+  if (state.mobilePointerId === event.pointerId && state.mobileDragTarget) {
+    const { screenPoint, worldPoint } = pointerToWorld(event);
+    if (!withinBounds(worldPoint)) return;
+    updatePinGesture(screenPoint, worldPoint, DESKTOP_PIN_TAP_SLOP);
+    return;
+  }
+  // Hover preview — only when placing destination or no origin yet
+  if (!state.mobileDragTarget && state.currentRender && state.data) {
+    const { screenPoint, worldPoint } = pointerToWorld(event);
+    if (state.placingDestination || state.placingOrigin) {
+      state.cursorScreen = screenPoint;
+      state.cursorPoint = worldPoint;
+    } else {
+      state.cursorScreen = null;
+      state.cursorPoint = null;
+    }
+    state.dirty = true;
+    requestDraw();
+  }
 }
 
 function handleDesktopPointerUp(event) {
@@ -3389,6 +3526,12 @@ function handleDesktopPointerUp(event) {
 
   const dragTarget = state.mobileDragTarget;
   const moved = state.mobileGestureMoved;
+
+  if (dragTarget === "pan") {
+    try { mapCanvas.releasePointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+    resetMobileGestureState();
+    return;
+  }
 
   if (dragTarget === "origin" && !moved) {
     clearPinnedOrigin();
@@ -3464,6 +3607,7 @@ function setPinnedOrigin(worldPoint) {
   state.cursorPoint = worldPoint;
   syncBrowserUrl();
   syncRouteBuilderPanel();
+  syncPinSummary();
   state.dirty = true;
   syncMobileSheet();
   requestDraw();
@@ -3473,6 +3617,8 @@ function clearPinnedOrigin() {
   state.pinned = false;
   state.pinnedPoint = null;
   state.pinnedScreen = null;
+  if (state.placingDestination) setPlacingDestination(false);
+  if (state.placingOrigin) setPlacingOrigin(false);
   clearProbePoint();
   state.cursorScreen = null;
   state.cursorPoint = null;
@@ -3480,6 +3626,7 @@ function clearPinnedOrigin() {
   state.originLabel = null;
   syncBrowserUrl();
   syncRouteBuilderPanel();
+  syncPinSummary();
   state.dirty = true;
   syncMobileSheet();
   requestDraw();
@@ -3678,6 +3825,7 @@ async function init() {
   outlineToggle.checked = state.showReachOutline;
   syncProbeRouteTable(state.probePoint);
   syncRouteBuilderPanel();
+  syncPinSummary();
   syncTravelSettingsInputs();
   syncHeatmapLegend();
   syncZoomControls();
@@ -4048,6 +4196,7 @@ async function init() {
           destAddressInput.value = result.title;
           destSearchMeta.textContent = `Destination pinned to ${result.title}.`;
           destSearchResults.innerHTML = "";
+          state.probeLabel = result.title;
           setProbePoint(worldPoint);
           syncBrowserUrl();
         });

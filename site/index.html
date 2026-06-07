@@ -220,16 +220,29 @@
             </div>
           </div>
 
-          <section class="sidebar-search-panel">
-            <form id="originSearchForm" class="sidebar-search-form" autocomplete="off">
-              <label class="sidebar-search-label" for="originAddressInput">Origin</label>
-              <div class="sidebar-search-row">
-                <input id="originAddressInput" name="originAddress" type="text" placeholder="Search an NYC address" autocomplete="off" />
-                <button id="originSearchButton" class="pin-button search-button" type="submit">Go</button>
-              </div>
-              <div id="originSearchMeta" class="search-meta" hidden></div>
-              <div id="originSearchResults" class="search-results" aria-live="polite"></div>
+          <div class="od-card">
+            <form id="originSearchForm" class="od-row" autocomplete="off">
+              <span class="od-dot od-dot--origin">📍</span>
+              <input id="originAddressInput" name="originAddress" class="od-input" type="text" placeholder="Set origin…" autocomplete="off" />
+              <button id="setOriginBtn" class="od-action-btn od-map-btn" type="button" title="Place on map">Map</button>
+              <button id="originSearchButton" class="od-action-btn od-go-btn" type="submit">Go</button>
+              <button id="clearOriginBtn" class="od-action-btn od-clear-btn" type="button" title="Clear origin" hidden>✕</button>
             </form>
+            <div id="originSearchMeta" class="od-meta" hidden></div>
+            <div id="originSearchResults" class="search-results" aria-live="polite"></div>
+
+            <div class="od-divider"><span class="od-divider-line"></span></div>
+
+            <form id="destSearchForm" class="od-row" autocomplete="off">
+              <span class="od-dot od-dot--dest">🎯</span>
+              <input id="destAddressInput" name="destAddress" class="od-input" type="text" placeholder="Set destination…" autocomplete="off" />
+              <button id="setDestinationBtn" class="od-action-btn od-map-btn" type="button" title="Place on map">Map</button>
+              <button id="destSearchButton" class="od-action-btn od-go-btn" type="submit">Go</button>
+              <button id="clearDestBtn" class="od-action-btn od-clear-btn" type="button" title="Clear destination" hidden>✕</button>
+            </form>
+            <div id="destSearchMeta" class="od-meta" hidden></div>
+            <div id="destSearchResults" class="search-results" aria-live="polite"></div>
+          </div>
           <section class="sidebar-time-panel">
             <div class="sidebar-search-label">Departure time</div>
             <div class="sidebar-time-row">
