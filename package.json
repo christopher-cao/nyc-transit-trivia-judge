@@ -1,9 +1,8 @@
 {
-  "name": "nyc-cartogram",
+  "name": "transit-trivia-judge",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev",
+    "deploy": "wrangler pages deploy site --project-name nyc-transit-trivia",
     "login": "wrangler login"
   },
   "devDependencies": {

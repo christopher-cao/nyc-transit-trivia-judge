@@ -2,7 +2,6 @@
 
 An interactive NYC subway route comparison tool. Pin an origin and destination, then build competing subway route options to compare their travel times side by side.
 
-
 ## What It Does
 
 - Place an origin pin and a destination pin on the NYC subway map
@@ -18,7 +17,7 @@ The app uses MTA GTFS data for station locations, route shapes, and departure sc
 ## Requirements
 
 - Python 3 (standard library only — no install step)
-- `pnpm` and Node.js only if you want to run or deploy the Cloudflare Worker
+- `pnpm` and Node.js for deploying to Cloudflare Pages
 
 ## Build The Site Data
 
@@ -48,34 +47,32 @@ Then open:
 http://localhost:8000/site/
 ```
 
-Notes:
+Note: address search uses OpenStreetMap Nominatim, so it requires internet access.
 
-- Address search uses OpenStreetMap Nominatim, so it requires internet access.
-- Production-style URLs like `/nyc/@40.71267,-73.92366` are not available on plain static localhost. Use query-string sharing there instead.
+## Deploy to Cloudflare Pages
 
-## Cloudflare Worker Dev And Deploy
-
-Install the Worker tooling:
+Install tooling:
 
 ```bash
 pnpm install
 ```
 
-Run the Worker locally:
+Authenticate (first time only):
 
 ```bash
-pnpm run dev
+pnpm run login
 ```
 
 Deploy:
 
 ```bash
+python3 build_commute_site_data.py  # regenerate data if needed
 pnpm run deploy
 ```
 
-The Worker rewrites asset paths from `site/` and falls back to `site/index.html` for pretty origin routes.
+First deploy creates the project and prints a `*.pages.dev` URL. Subsequent deploys update it instantly.
 
-If Wrangler postinstall steps were blocked on first install, run `pnpm approve-builds` before deploying.
+To add a custom domain: Cloudflare Dashboard → Pages → nyc-transit-trivia → **Custom Domains**.
 
 ## Project Layout
 
@@ -83,8 +80,8 @@ If Wrangler postinstall steps were blocked on first install, run `pnpm approve-b
 - `site/index.html` — app shell
 - `site/app.js` — route comparison logic, map rendering, address search, sharing
 - `site/styles.css` — site styles
+- `site/_redirects` — Cloudflare Pages redirect rule for pretty URLs
 - `site/data/commute_map_data.json` — generated dataset (not committed)
-- `src/worker.js` — Cloudflare Worker entrypoint
 
 ## Notes
 
