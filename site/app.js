@@ -1,35 +1,17 @@
 const DATA_URL = new URL("./data/commute_map_data.json", import.meta.url).toString();
 const DEFAULT_TRANSIT_TIME_MINUTES = 4;
 const DEFAULT_MAX_TIME_MINUTES = 60;
-const MIN_AREA_WEIGHT = 1;
-const MAX_AREA_WEIGHT = 2.67;
 const MIN_VIEWPORT_SCALE = 1;
 const MAX_VIEWPORT_SCALE = 4;
 const VIEWPORT_ZOOM_STEP = 1.35;
 const PANEL_PADDING = 18;
 const ROUTE_LINE_WIDTH = 2.2;
-const WEIGHT_BLUR_PASSES = 2;
-const WEIGHT_BLUR_RADIUS = 2;
 const HOVER_DEADBAND = 14;
 const MOBILE_PIN_TAP_SLOP = 10;
 const MOBILE_PIN_HIT_RADIUS = 26;
 const DESKTOP_PIN_TAP_SLOP = 6;
 const DESKTOP_PIN_HIT_RADIUS = 18;
-const HEATMAP_RESOLUTION_SCALE = 2;
-const HEATMAP_BLUR_PX = 7;
-const HEATMAP_ALPHA = 0.8;
-const WARP_INFLUENCE_RADIUS = 8;
-const WARP_SIGMA_CELLS = 3.4;
-const WARP_DISPLACEMENT_SCALE = 1.0;
-const WARP_MAX_SHIFT_CELLS = 6.6;
-const WARP_NODE_SMOOTHING_PASSES = 3;
-const WARP_EDGE_FADE_CELLS = 10;
-const IMAGE_WARP_BLOCK_CELLS = 4;
-const IMAGE_WARP_OVERDRAW_PX = 0.35;
-const WARP_LINE_CURVE_TOLERANCE_PX = 1.1;
-const WARP_LINE_MAX_SUBDIVISION_DEPTH = 7;
 const DEFAULT_SWIM_METERS_PER_MINUTE = 28;
-const REACHABILITY_THRESHOLD_MINUTES = 60;
 const MAX_WALK_TO_STATION_MINUTES = 30;
 const SHARE_COORDINATE_DECIMALS = 5;
 const EMOJI_BURST_INTERVAL_MS = 90;
@@ -54,9 +36,6 @@ const EMOJI_BURST_SETS = {
 const state = {
   data: null,
   ready: false,
-  showWarp: false,
-  showHeatmap: false,
-  showReachOutline: false,
   showPinHint: true,
   isMobile: false,
   drawerCollapsed: false,
@@ -88,7 +67,6 @@ const state = {
   mobileDrawerDidSwipe: false,
   transform: null,
   currentRender: null,
-  baseMapCache: null,
   travelSettings: null,
   travelSettingsDefaults: null,
   dynamicAdjacency: null,
@@ -104,12 +82,6 @@ const state = {
 
 const mapCanvas = document.getElementById("mapCanvas");
 const statusText = document.getElementById("statusText");
-const warpToggle = document.getElementById("warpToggle");
-const heatmapToggle = document.getElementById("heatmapToggle");
-const outlineToggle = document.getElementById("outlineToggle");
-const heatmapLegend = document.getElementById("heatmapLegend");
-const heatmapLegendMin = document.getElementById("heatmapLegendMin");
-const heatmapLegendMax = document.getElementById("heatmapLegendMax");
 const zoomInButton = document.getElementById("zoomInButton");
 const zoomOutButton = document.getElementById("zoomOutButton");
 const fullscreenButton = document.getElementById("fullscreenButton");
@@ -148,33 +120,15 @@ const clearDestBtn = document.getElementById("clearDestBtn");
 const timePickerInput = document.getElementById("timePickerInput");
 const clearTimeBtn = document.getElementById("clearTimeBtn");
 const mapDistanceOverlay = document.getElementById("mapDistanceOverlay");
-const mapDistanceOptimal = document.getElementById("mapDistanceOptimal");
 const mapDistanceRoute = document.getElementById("mapDistanceRoute");
-const reachScoreCard = document.getElementById("reachScoreCard");
-const reachScoreValue = document.getElementById("reachScoreValue");
-const reachScoreMeta = document.getElementById("reachScoreMeta");
 const mobileOriginTitle = document.getElementById("mobileOriginTitle");
 const mobileStatusText = document.getElementById("mobileStatusText");
 const mobileClearButton = document.getElementById("mobileClearButton");
 const mobileSheet = document.getElementById("mobileSheet");
 const mobileSheetToggle = document.getElementById("mobileSheetToggle");
 const mobileSheetBody = document.getElementById("mobileSheetBody");
-const mobileReachValue = document.getElementById("mobileReachValue");
-const mobileReachMeta = document.getElementById("mobileReachMeta");
-const nearestRoutePanel = document.getElementById("nearestRoutePanel");
-const nearestRouteMeta = document.getElementById("nearestRouteMeta");
-const nearestRouteTableBody = document.getElementById("nearestRouteTableBody");
-const mobileNearestRoutePanel = document.getElementById("mobileNearestRoutePanel");
-const mobileNearestRouteMeta = document.getElementById("mobileNearestRouteMeta");
-const mobileNearestRouteTableBody = document.getElementById("mobileNearestRouteTableBody");
-const probeRoutePanel = document.getElementById("probeRoutePanel");
-const probeRouteMeta = document.getElementById("probeRouteMeta");
-const probeRouteTableBody = document.getElementById("probeRouteTableBody");
-const mobileProbeRoutePanel = document.getElementById("mobileProbeRoutePanel");
-const mobileProbeRouteMeta = document.getElementById("mobileProbeRouteMeta");
-const mobileProbeRouteTableBody = document.getElementById("mobileProbeRouteTableBody");
-const routeBuilderPanel = document.getElementById("routeBuilderPanel");
 const optimalAccordionContainer = document.getElementById("optimalAccordionContainer");
+const routeBuilderPanel = document.getElementById("routeBuilderPanel");
 const routeComparisons = document.getElementById("routeComparisons");
 const routePalette = document.getElementById("routePalette");
 const addComparisonBtn = document.getElementById("addComparisonBtn");
@@ -184,9 +138,6 @@ const mobileRouteComparisons = document.getElementById("mobileRouteComparisons")
 const mobileRoutePalette = document.getElementById("mobileRoutePalette");
 const mobileAddComparisonBtn = document.getElementById("mobileAddComparisonBtn");
 const mobileUndoRouteBtn = document.getElementById("mobileUndoRouteBtn");
-const mobileWarpToggle = document.getElementById("mobileWarpToggle");
-const mobileHeatmapToggle = document.getElementById("mobileHeatmapToggle");
-const mobileOutlineToggle = document.getElementById("mobileOutlineToggle");
 const mobileSearchForm = document.getElementById("mobileSearchForm");
 const mobileAddressInput = document.getElementById("mobileAddressInput");
 const mobileSearchButton = document.getElementById("mobileSearchButton");
@@ -194,10 +145,6 @@ const mobileSearchMeta = document.getElementById("mobileSearchMeta");
 const mobileSearchResults = document.getElementById("mobileSearchResults");
 const mobileLocateButton = document.getElementById("mobileLocateButton");
 const mobileShareButton = document.getElementById("mobileShareButton");
-const mobileMapHelp = document.getElementById("mobileMapHelp");
-const mobileMapInstructions = document.getElementById("mobileMapInstructions");
-const mobileInstructionsLocateButton = document.getElementById("mobileInstructionsLocateButton");
-const mobileHelpBubble = document.getElementById("mobileHelpBubble");
 const settingsInputs = Array.from(document.querySelectorAll("[data-setting-key]"));
 const settingsValueLabels = Array.from(document.querySelectorAll("[data-setting-value]"));
 const settingsResetButtons = Array.from(document.querySelectorAll("[data-settings-reset]"));
@@ -231,7 +178,7 @@ const searchUis = [
     meta: mobileSearchMeta,
     results: mobileSearchResults,
   },
-];
+].filter((ui) => ui.form !== null);
 
 shareXIcon.src = new URL("./x.png", import.meta.url).toString();
 shareFacebookIcon.src = new URL("./Facebook.png", import.meta.url).toString();
@@ -352,7 +299,6 @@ function syncTravelSettingsInputs() {
 function applyTravelSettings(nextSettings, { persist = true } = {}) {
   state.travelSettings = sanitizeTravelSettings(nextSettings);
   syncTravelSettingsInputs();
-  syncHeatmapLegend();
   if (persist) persistTravelSettings();
   state.dirty = true;
   requestDraw();
@@ -492,11 +438,6 @@ function clampToRange(value, min, max) {
   return clamp(value, min, max);
 }
 
-function smoothstep(edge0, edge1, value) {
-  const t = clamp((value - edge0) / ((edge1 - edge0) || 1), 0, 1);
-  return t * t * (3 - 2 * t);
-}
-
 function distance(a, b) {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
 }
@@ -592,43 +533,6 @@ function normalizeTravelPoint(point) {
     swimMinutes: border.distance / settings.swimSpeed,
     swimDistance: border.distance,
   };
-}
-
-function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
-
-function bilerpPoint(p00, p10, p01, p11, tx, ty) {
-  return [
-    lerp(lerp(p00[0], p10[0], tx), lerp(p01[0], p11[0], tx), ty),
-    lerp(lerp(p00[1], p10[1], tx), lerp(p01[1], p11[1], tx), ty),
-  ];
-}
-
-function triangleArea(a, b, c) {
-  return Math.abs((a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1])) / 2);
-}
-
-function quadArea(p00, p10, p11, p01) {
-  return triangleArea(p00, p10, p11) + triangleArea(p00, p11, p01);
-}
-
-function barycentricWeights(point, a, b, c) {
-  const denominator = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
-  if (Math.abs(denominator) < 1e-9) return null;
-  const w1 = ((b[1] - c[1]) * (point[0] - c[0]) + (c[0] - b[0]) * (point[1] - c[1])) / denominator;
-  const w2 = ((c[1] - a[1]) * (point[0] - c[0]) + (a[0] - c[0]) * (point[1] - c[1])) / denominator;
-  const w3 = 1 - w1 - w2;
-  const epsilon = 1e-5;
-  if (w1 < -epsilon || w2 < -epsilon || w3 < -epsilon) return null;
-  return [w1, w2, w3];
-}
-
-function interpolateTriangle(weights, a, b, c) {
-  return [
-    weights[0] * a[0] + weights[1] * b[0] + weights[2] * c[0],
-    weights[0] * a[1] + weights[1] * b[1] + weights[2] * c[1],
-  ];
 }
 
 function formatMinutes(minutes) {
@@ -737,26 +641,6 @@ function cancelMobileDrawerGesture(event) {
   mobileSheetToggle?.releasePointerCapture?.(event.pointerId);
 }
 
-function syncMobileHelp() {
-  if (!mobileMapHelp || !mobileMapInstructions || !mobileHelpBubble) return;
-  const collapsed = state.mobileHelpCollapsed;
-  mobileMapHelp.classList.toggle("is-collapsed", collapsed);
-  mobileMapInstructions.setAttribute("aria-hidden", String(collapsed));
-  mobileHelpBubble.hidden = !collapsed;
-  mobileHelpBubble.setAttribute("aria-expanded", String(!collapsed));
-}
-
-function collapseMobileHelp() {
-  if (state.mobileHelpCollapsed) return;
-  state.mobileHelpCollapsed = true;
-  syncMobileHelp();
-}
-
-function expandMobileHelp() {
-  state.mobileHelpCollapsed = false;
-  syncMobileHelp();
-}
-
 function worldToLonLat(point) {
   const metersPerDegLat = 111_320.0;
   const metersPerDegLon = metersPerDegLat * Math.cos((state.data.meta.lat0 * Math.PI) / 180);
@@ -828,16 +712,6 @@ function buildViewUrlFragment(
   if (zoomLevel > MIN_VIEWPORT_SCALE) {
     params.set("zoom", zoomLevel.toFixed(2));
   }
-  if (!state.showWarp) {
-    params.set("warp", "0");
-  }
-  if (!state.showHeatmap) {
-    params.set("heatmap", "0");
-  }
-  if (state.showReachOutline) {
-    params.set("outline", "1");
-  }
-
   const query = params.toString();
   if (isLocalStaticDev()) {
     return query ? `?${query}` : "";
@@ -856,10 +730,7 @@ function parseSharedView() {
   const probe = parseCoordinatePair(searchParams.get("distance"));
   const zoomRaw = Number(searchParams.get("zoom"));
   const zoom = Number.isFinite(zoomRaw) ? clamp(zoomRaw, MIN_VIEWPORT_SCALE, MAX_VIEWPORT_SCALE) : null;
-  const warp = searchParams.has("warp") ? searchParams.get("warp") !== "0" : null;
-  const heatmap = searchParams.has("heatmap") ? searchParams.get("heatmap") !== "0" : null;
-  const outline = searchParams.has("outline") ? searchParams.get("outline") !== "0" : null;
-  return { origin, probe, zoom, warp, heatmap, outline };
+  return { origin, probe, zoom };
 }
 
 function replaceBrowserUrl(pathOrQuery = "") {
@@ -895,35 +766,6 @@ function shortOriginLabel(label) {
   const primary = label.split(",")[0].trim();
   if (/^\d/.test(primary)) return primary;
   return primary.toLowerCase().startsWith("near ") ? primary : `Near ${primary}`;
-}
-
-function heatmapColor(minutes, alpha = 0.56) {
-  const t = clamp(minutes / currentTravelSettings().maxTransitTime, 0, 1);
-  const stops = [
-    { t: 0, color: [220, 69, 37] },
-    { t: 0.2, color: [244, 127, 46] },
-    { t: 0.4, color: [255, 196, 79] },
-    { t: 0.62, color: [248, 232, 156] },
-    { t: 0.8, color: [149, 188, 211] },
-    { t: 1, color: [74, 103, 141] },
-  ];
-  let left = stops[0];
-  let right = stops[stops.length - 1];
-  for (let index = 0; index < stops.length - 1; index += 1) {
-    if (t >= stops[index].t && t <= stops[index + 1].t) {
-      left = stops[index];
-      right = stops[index + 1];
-      break;
-    }
-  }
-  const mix = (t - left.t) / ((right.t - left.t) || 1);
-  const rgb = left.color.map((value, index) => Math.round(value + (right.color[index] - value) * mix));
-  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
-}
-
-function minuteToAreaWeight(minutes) {
-  const t = clamp(minutes / currentTravelSettings().maxTransitTime, 0, 1);
-  return MIN_AREA_WEIGHT + (1 - t) * (MAX_AREA_WEIGHT - MIN_AREA_WEIGHT);
 }
 
 function defaultMapCenter(bounds = state.data?.meta?.bounds) {
@@ -995,79 +837,6 @@ function createCanvasBacking(canvas) {
   const context = canvas.getContext("2d");
   context.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { width: rect.width, height: rect.height };
-}
-
-function createCanvasSurface(width, height) {
-  const dpr = window.devicePixelRatio || 1;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(width * dpr));
-  canvas.height = Math.max(1, Math.round(height * dpr));
-  const context = canvas.getContext("2d");
-  context.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return { canvas, context, width, height };
-}
-
-function expandTriangle(points, amount) {
-  if (!amount) return points.map((point) => point.slice());
-  const centroid = [
-    (points[0][0] + points[1][0] + points[2][0]) / 3,
-    (points[0][1] + points[1][1] + points[2][1]) / 3,
-  ];
-  return points.map((point) => {
-    const dx = point[0] - centroid[0];
-    const dy = point[1] - centroid[1];
-    const length = Math.hypot(dx, dy) || 1;
-    return [point[0] + (dx / length) * amount, point[1] + (dy / length) * amount];
-  });
-}
-
-function trianglePath(drawCtx, a, b, c) {
-  drawCtx.beginPath();
-  drawCtx.moveTo(a[0], a[1]);
-  drawCtx.lineTo(b[0], b[1]);
-  drawCtx.lineTo(c[0], c[1]);
-  drawCtx.closePath();
-}
-
-function affineTransformBetweenTriangles(srcA, srcB, srcC, dstA, dstB, dstC) {
-  const srcUx = srcB[0] - srcA[0];
-  const srcUy = srcB[1] - srcA[1];
-  const srcVx = srcC[0] - srcA[0];
-  const srcVy = srcC[1] - srcA[1];
-  const determinant = srcUx * srcVy - srcVx * srcUy;
-  if (Math.abs(determinant) < 1e-9) return null;
-
-  const inv00 = srcVy / determinant;
-  const inv01 = -srcVx / determinant;
-  const inv10 = -srcUy / determinant;
-  const inv11 = srcUx / determinant;
-
-  const dstUx = dstB[0] - dstA[0];
-  const dstUy = dstB[1] - dstA[1];
-  const dstVx = dstC[0] - dstA[0];
-  const dstVy = dstC[1] - dstA[1];
-
-  const a = dstUx * inv00 + dstVx * inv10;
-  const c = dstUx * inv01 + dstVx * inv11;
-  const b = dstUy * inv00 + dstVy * inv10;
-  const d = dstUy * inv01 + dstVy * inv11;
-  const e = dstA[0] - a * srcA[0] - c * srcA[1];
-  const f = dstA[1] - b * srcA[0] - d * srcA[1];
-
-  return [a, b, c, d, e, f];
-}
-
-function drawWarpedTriangle(drawCtx, sourceCanvas, sourceWidth, sourceHeight, srcA, srcB, srcC, dstA, dstB, dstC) {
-  const matrix = affineTransformBetweenTriangles(srcA, srcB, srcC, dstA, dstB, dstC);
-  if (!matrix) return;
-  const [a, b, c, d, e, f] = matrix;
-  const [clipA, clipB, clipC] = expandTriangle([dstA, dstB, dstC], IMAGE_WARP_OVERDRAW_PX);
-  drawCtx.save();
-  trianglePath(drawCtx, clipA, clipB, clipC);
-  drawCtx.clip();
-  drawCtx.transform(a, b, c, d, e, f);
-  drawCtx.drawImage(sourceCanvas, 0, 0, sourceWidth, sourceHeight);
-  drawCtx.restore();
 }
 
 function drawPanelBackground(drawCtx, width, height) {
@@ -1295,59 +1064,6 @@ function streetWidth(kind) {
   return 1.1;
 }
 
-function buildBaseMapCache(width, height, sourceTransform) {
-  const surface = createCanvasSurface(width, height);
-  surface.context.clearRect(0, 0, width, height);
-  drawCityBasemap(surface.context, (point) => sourceTransform.toScreen(point), { includeBoroughBorders: false });
-  surface.cacheKey = sourceTransform.cacheKey;
-  return surface;
-}
-
-function getBaseMapCache(width, height, sourceTransform) {
-  const cache = state.baseMapCache;
-  if (cache && cache.width === width && cache.height === height && cache.cacheKey === sourceTransform.cacheKey) {
-    return cache;
-  }
-  const nextCache = buildBaseMapCache(width, height, sourceTransform);
-  state.baseMapCache = nextCache;
-  return nextCache;
-}
-
-function drawWarpedBaseMap(drawCtx, width, height, warp, sourceTransform, destinationTransform) {
-  const surface = getBaseMapCache(width, height, sourceTransform);
-  const { gridCols, gridRows, bounds } = state.data.meta;
-  const [minX, minY, maxX, maxY] = bounds;
-  const cellW = (maxX - minX) / gridCols;
-  const cellH = (maxY - minY) / gridRows;
-
-  drawCtx.save();
-  drawCtx.imageSmoothingEnabled = true;
-  for (let row = 0; row < gridRows; row += IMAGE_WARP_BLOCK_CELLS) {
-    const rowEnd = Math.min(gridRows, row + IMAGE_WARP_BLOCK_CELLS);
-    for (let col = 0; col < gridCols; col += IMAGE_WARP_BLOCK_CELLS) {
-      const colEnd = Math.min(gridCols, col + IMAGE_WARP_BLOCK_CELLS);
-      const worldP00 = [minX + col * cellW, minY + row * cellH];
-      const worldP10 = [minX + colEnd * cellW, minY + row * cellH];
-      const worldP11 = [minX + colEnd * cellW, minY + rowEnd * cellH];
-      const worldP01 = [minX + col * cellW, minY + rowEnd * cellH];
-
-      const srcP00 = sourceTransform.toScreen(worldP00);
-      const srcP10 = sourceTransform.toScreen(worldP10);
-      const srcP11 = sourceTransform.toScreen(worldP11);
-      const srcP01 = sourceTransform.toScreen(worldP01);
-      const dstP00 = destinationTransform.toScreen(warp.warpNodes[row][col]);
-      const dstP10 = destinationTransform.toScreen(warp.warpNodes[row][colEnd]);
-      const dstP11 = destinationTransform.toScreen(warp.warpNodes[rowEnd][colEnd]);
-      const dstP01 = destinationTransform.toScreen(warp.warpNodes[rowEnd][col]);
-
-      drawWarpedTriangle(drawCtx, surface.canvas, width, height, srcP00, srcP10, srcP11, dstP00, dstP10, dstP11);
-      drawWarpedTriangle(drawCtx, surface.canvas, width, height, srcP00, srcP11, srcP01, dstP00, dstP11, dstP01);
-    }
-  }
-  drawCtx.restore();
-}
-
-// what is this?
 function buildDynamicAdjacency() {
   const defaults = state.travelSettingsDefaults || getTravelSettingsDefaults();
   const routeStates = state.data.routeStates;
@@ -1425,30 +1141,6 @@ function walkMinutesToStation(point, stationIndex) {
   );
 }
 
-function nearestStationsByRoute(point) {
-  const stations = state.data.stations;
-  const routeIds = sortRouteIds(state.routeStationIndex.keys());
-  return routeIds.map((routeId) => {
-    let bestIndex = -1;
-    let bestWalkMinutes = Infinity;
-    for (const stationIndex of state.routeStationIndex.get(routeId)) {
-      const walkMinutes = walkMinutesToStation(point, stationIndex);
-      if (walkMinutes < bestWalkMinutes) {
-        bestWalkMinutes = walkMinutes;
-        bestIndex = stationIndex;
-      }
-    }
-    const reachable = bestWalkMinutes <= MAX_WALK_TO_STATION_MINUTES;
-    return {
-      routeId,
-      stationIndex: bestIndex,
-      stationName: stations[bestIndex].name,
-      walkMinutes: bestWalkMinutes,
-      reachable,
-    };
-  });
-}
-
 function nearestStations(point, count) {
   const settings = currentTravelSettings();
   return state.data.stations
@@ -1499,10 +1191,7 @@ function runDijkstra(origin) {
           state.travelSettingsDefaults.transitTime;
         waitMinutes = settings.transitTime + boardingDelta;
       }
-      distances[routeStateIndex] = Math.min(
-        distances[routeStateIndex],
-        arrivalAtStation + waitMinutes,
-      );
+      distances[routeStateIndex] = Math.min(distances[routeStateIndex], arrivalAtStation + waitMinutes);
     }
   }
 
@@ -1523,28 +1212,22 @@ function runDijkstra(origin) {
         const walkTime = edge.kind === "interchange"
           ? edge.walkDistance / settings.walkingSpeed + edge.walkPenalty
           : 0;
-        const transferPenalty = settings.transferTime;
         const absoluteArrival = queryTime + distances[current] + walkTime;
         const dep = nextDeparture(edge.toIndex, absoluteArrival);
         const boardingWait = dep === Infinity ? Infinity : dep - absoluteArrival;
-        weight = walkTime + transferPenalty + boardingWait;
+        weight = walkTime + settings.transferTime + boardingWait;
       } else {
-        weight =
-          edge.kind === "ride"
-            ? edge.rideMinutes
-            : edge.kind === "transfer"
-              ? settings.transferTime + settings.transitTime + edge.boardingDelta
-              : edge.walkDistance / settings.walkingSpeed +
-                edge.walkPenalty +
-                settings.transferTime +
-                settings.transitTime +
-                edge.boardingDelta;
+        weight = edge.kind === "ride"
+          ? edge.rideMinutes
+          : edge.kind === "transfer"
+            ? settings.transferTime + settings.transitTime + edge.boardingDelta
+            : edge.walkDistance / settings.walkingSpeed + edge.walkPenalty +
+              settings.transferTime + settings.transitTime + edge.boardingDelta;
       }
-      const nextIndex = edge.toIndex;
       const candidate = distances[current] + weight;
-      if (candidate < distances[nextIndex]) {
-        distances[nextIndex] = candidate;
-        prev[nextIndex] = current;
+      if (candidate < distances[edge.toIndex]) {
+        distances[edge.toIndex] = candidate;
+        prev[edge.toIndex] = current;
       }
     }
   }
@@ -1552,39 +1235,13 @@ function runDijkstra(origin) {
   return { distances, prev, seeds };
 }
 
-function estimateTravel(origin, originDistances, destinationPoint) {
-  const settings = currentTravelSettings();
-  const destination = normalizeTravelPoint(destinationPoint);
-  const swimMinutes = origin.swimMinutes + destination.swimMinutes;
-  let bestMinutes =
-    distance(origin.point, destination.point) / settings.walkingSpeed +
-    swimMinutes;
-  const nearby = nearestStations(destination.point, state.data.meta.cellNearestStations);
-  for (const station of nearby) {
-    for (const routeStateIndex of state.data.stationStates[station.index] || []) {
-      bestMinutes = Math.min(
-        bestMinutes,
-        originDistances[routeStateIndex] + station.walkMinutes + destination.swimMinutes,
-      );
-    }
-  }
-  return {
-    minutes: bestMinutes,
-    baseMinutes: bestMinutes - swimMinutes,
-    swimMinutes,
-    destination,
-  };
-}
-
-function traceOptimalPath(origin, warp, destinationPoint) {
-  if (!warp?.prev || !warp.distances) return null;
-  const { distances, prev } = warp;
+function traceOptimalPath(origin, dijkstraResult, destinationPoint) {
+  const { distances, prev } = dijkstraResult;
   const settings = currentTravelSettings();
   const routeStates = state.data.routeStates;
   const stations = state.data.stations;
   const destination = normalizeTravelPoint(destinationPoint);
 
-  // Find best exit: lowest distances[rsi] + walkToDestination
   let bestTotal = Infinity;
   let bestExitRsi = -1;
   let bestExitSi = -1;
@@ -1593,36 +1250,28 @@ function traceOptimalPath(origin, warp, destinationPoint) {
     const walkOut = station.walkMinutes + destination.swimMinutes;
     for (const rsi of state.data.stationStates[station.index] || []) {
       const total = distances[rsi] + walkOut;
-      if (total < bestTotal) {
-        bestTotal = total;
-        bestExitRsi = rsi;
-        bestExitSi = station.index;
-      }
+      if (total < bestTotal) { bestTotal = total; bestExitRsi = rsi; bestExitSi = station.index; }
     }
   }
-  // Also try pure walk
+
   const pureWalk = distance(origin.point, destination.point) / settings.walkingSpeed + origin.swimMinutes + destination.swimMinutes;
   if (pureWalk < bestTotal) return { steps: [{ kind: "walk", stationName: null, minutes: pureWalk }], totalMinutes: pureWalk };
   if (bestExitRsi === -1) return null;
 
-  // Trace back through prev
   const path = [];
   let node = bestExitRsi;
-  while (node !== -1) {
-    path.push(node);
-    node = prev[node];
-  }
+  while (node !== -1) { path.push(node); node = prev[node]; }
   path.reverse();
 
-  // Reconstruct steps
   const steps = [];
   const entrySi = routeStates[path[0]].stationIndex;
   const entryWalk = walkMinutesToStation(origin.point, entrySi) + origin.swimMinutes;
   steps.push({ kind: "walk", stationName: stations[entrySi].name, minutes: entryWalk });
+  const entryWait = distances[path[0]] - entryWalk;
+  steps.push({ kind: "wait", routeId: routeStates[path[0]].routeId, minutes: entryWait });
 
   let rideStartName = stations[entrySi].name;
-  let rideStartRsi = path[0];
-  let rideDist = distances[path[0]] - entryWalk;
+  let rideDist = 0;
 
   for (let i = 1; i < path.length; i++) {
     const rsi = path[i];
@@ -1630,11 +1279,9 @@ function traceOptimalPath(origin, warp, destinationPoint) {
     const edgeDist = distances[rsi] - distances[prevRsi];
     const prevRouteId = routeStates[prevRsi].routeId;
     const curRouteId = routeStates[rsi].routeId;
-
     if (curRouteId === prevRouteId) {
       rideDist += edgeDist;
     } else {
-      // Route change — emit ride + transfer
       const transferSi = routeStates[prevRsi].stationIndex;
       steps.push({ kind: "ride", routeId: prevRouteId, from: rideStartName, to: stations[transferSi].name, minutes: rideDist });
       steps.push({ kind: "transfer", at: stations[transferSi].name, from: prevRouteId, to: curRouteId, minutes: edgeDist });
@@ -1649,6 +1296,39 @@ function traceOptimalPath(origin, warp, destinationPoint) {
   steps.push({ kind: "walk", stationName: exitStation.name, minutes: exitWalk });
 
   return { steps, totalMinutes: bestTotal };
+}
+
+function renderOptimalPathAccordion() {
+  const result = state.optimalPathResult;
+  if (!result) return "";
+  const showClock = state.selectedTimeMinutes !== null && state.selectedDayType !== null;
+  let clock = state.selectedTimeMinutes ?? 0;
+  const stepsHtml = result.steps.map((step) => {
+    const stepStart = clock;
+    clock += step.minutes;
+    const timeTag = showClock
+      ? `<span class="route-step-clock">${formatClock(stepStart)}–${formatClock(clock)}</span>`
+      : "";
+    if (step.kind === "walk") {
+      return `<li class="route-comparison-step route-comparison-step-walk">${timeTag}Walk ${formatMinutes(step.minutes)}${step.stationName ? ` · <strong>${escapeHtml(step.stationName)}</strong>` : ""}</li>`;
+    }
+    if (step.kind === "wait") {
+      return `<li class="route-comparison-step route-comparison-step-wait">${timeTag}Wait ${formatMinutes(step.minutes)} for ${renderRouteBadge(step.routeId)}</li>`;
+    }
+    if (step.kind === "ride") {
+      return `<li class="route-comparison-step route-comparison-step-ride">${timeTag}${renderRouteBadge(step.routeId)} ${escapeHtml(step.from)} → <strong>${escapeHtml(step.to)}</strong> <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
+    }
+    if (step.kind === "transfer") {
+      return `<li class="route-comparison-step route-comparison-step-transfer">${timeTag}Transfer ${renderRouteBadge(step.from)} → ${renderRouteBadge(step.to)} at ${escapeHtml(step.at)} <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
+    }
+    return "";
+  }).join("");
+  return `
+    <details class="optimal-path-accordion">
+      <summary class="optimal-path-summary">✨ Answer key <span class="optimal-path-total">${formatMinutes(result.totalMinutes)}</span></summary>
+      <ol class="route-comparison-steps">${stepsHtml}</ol>
+    </details>
+  `;
 }
 
 function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
@@ -1825,11 +1505,12 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
   const pathStartSi = routeStates[path[0].rsi].stationIndex;
   const pathStartWalk = walkMinutesToStation(originPoint, pathStartSi);
   steps.push({ kind: "walk", stationName: stations[pathStartSi].name, minutes: pathStartWalk });
+  const seedWait = dist[path[0].rsi * N + path[0].phase] - pathStartWalk;
+  steps.push({ kind: "wait", routeId: routeIds[0], minutes: seedWait });
 
   let lastPhase = 0;
   let rideStartName = stations[pathStartSi].name;
-  // seed dist includes boarding wait; carry it forward into the first ride segment
-  let rideDist = dist[path[0].rsi * N + path[0].phase] - pathStartWalk;
+  let rideDist = 0;
 
   for (let i = 1; i < path.length; i += 1) {
     const { rsi, phase } = path[i];
@@ -1885,6 +1566,9 @@ function renderComparisonResult(seq, i) {
     if (step.kind === "walk") {
       return `<li class="route-comparison-step route-comparison-step-walk">${timeTag}Walk ${formatMinutes(step.minutes)} · <strong>${escapeHtml(step.stationName)}</strong></li>`;
     }
+    if (step.kind === "wait") {
+      return `<li class="route-comparison-step route-comparison-step-wait">${timeTag}Wait ${formatMinutes(step.minutes)} for ${renderRouteBadge(step.routeId)}</li>`;
+    }
     if (step.kind === "ride") {
       return `<li class="route-comparison-step route-comparison-step-ride">${timeTag}${renderRouteBadge(step.routeId)} ${escapeHtml(step.from)} → <strong>${escapeHtml(step.to)}</strong> <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
     }
@@ -1896,36 +1580,6 @@ function renderComparisonResult(seq, i) {
   return `
     <div class="route-comparison-total">Total: <strong>${formatMinutes(ev.totalMinutes)}</strong></div>
     <ol class="route-comparison-steps">${stepsHtml}</ol>
-  `;
-}
-
-function renderOptimalPathAccordion() {
-  const result = state.optimalPathResult;
-  if (!result) return "";
-  const showClock = state.selectedTimeMinutes !== null && state.selectedDayType !== null;
-  let clock = state.selectedTimeMinutes ?? 0;
-  const stepsHtml = result.steps.map((step) => {
-    const stepStart = clock;
-    clock += step.minutes;
-    const timeTag = showClock
-      ? `<span class="route-step-clock">${formatClock(stepStart)}–${formatClock(clock)}</span>`
-      : "";
-    if (step.kind === "walk") {
-      return `<li class="route-comparison-step route-comparison-step-walk">${timeTag}Walk ${formatMinutes(step.minutes)}${step.stationName ? ` · <strong>${escapeHtml(step.stationName)}</strong>` : ""}</li>`;
-    }
-    if (step.kind === "ride") {
-      return `<li class="route-comparison-step route-comparison-step-ride">${timeTag}${renderRouteBadge(step.routeId)} ${escapeHtml(step.from)} → <strong>${escapeHtml(step.to)}</strong> <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
-    }
-    if (step.kind === "transfer") {
-      return `<li class="route-comparison-step route-comparison-step-transfer">${timeTag}Transfer ${renderRouteBadge(step.from)} → ${renderRouteBadge(step.to)} at ${escapeHtml(step.at)} <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
-    }
-    return "";
-  }).join("");
-  return `
-    <details class="optimal-path-accordion">
-      <summary class="optimal-path-summary">✨ Answer key <span class="optimal-path-total">${formatMinutes(result.totalMinutes)}</span></summary>
-      <ol class="route-comparison-steps">${stepsHtml}</ol>
-    </details>
   `;
 }
 
@@ -1961,10 +1615,14 @@ function syncRouteBuilderPanel() {
     state.routeOptionEvals = state.routeOptions.map((seq) =>
       seq.length > 0 ? evaluateRouteOption(state.originPoint, state.probePoint, seq) : null
     );
+    const normalizedOrigin = normalizeTravelPoint(state.originPoint);
+    const dijkstraResult = runDijkstra(normalizedOrigin);
+    state.optimalPathResult = traceOptimalPath(normalizedOrigin, dijkstraResult, state.probePoint);
   } else {
     state.routeOptionEvals = state.routeOptions.map(() => null);
     state.optimalPathResult = null;
   }
+  if (optimalAccordionContainer) optimalAccordionContainer.innerHTML = renderOptimalPathAccordion();
   state.dirty = true;
   requestDraw();
 
@@ -2031,46 +1689,6 @@ function initRoutePalette(paletteEl) {
   });
 }
 
-function summarizeReachability(origin, originDistances) {
-  const totalStations = state.data.stations.length;
-  let reachableStations = 0;
-
-  for (const station of state.data.stations) {
-    const trip = estimateTravel(origin, originDistances, station.point);
-    if (trip.minutes <= REACHABILITY_THRESHOLD_MINUTES) {
-      reachableStations += 1;
-    }
-  }
-
-  return {
-    reachableStations,
-    totalStations,
-    ratio: totalStations ? reachableStations / totalStations : 0,
-  };
-}
-
-function syncReachabilityScore(summary = null) {
-  if (!summary) {
-    reachScoreCard.hidden = true;
-    reachScoreValue.textContent = "-- / --";
-    reachScoreMeta.textContent = "Choose an origin to see how much of the subway you can reach in an hour.";
-    if (mobileReachValue && mobileReachMeta) {
-      mobileReachValue.textContent = "-- / --";
-      mobileReachMeta.textContent = "Choose an origin to see how much of the subway you can reach in an hour.";
-    }
-    return;
-  }
-
-  reachScoreCard.hidden = false;
-  const percent = Math.round(summary.ratio * 100);
-  reachScoreValue.textContent = `${summary.reachableStations} / ${summary.totalStations}`;
-  reachScoreMeta.textContent = `${percent}% of stations are reachable within ${REACHABILITY_THRESHOLD_MINUTES} minutes.`;
-  if (mobileReachValue && mobileReachMeta) {
-    mobileReachValue.textContent = `${summary.reachableStations} / ${summary.totalStations}`;
-    mobileReachMeta.textContent = `${percent}% of stations are reachable within ${REACHABILITY_THRESHOLD_MINUTES} minutes.`;
-  }
-}
-
 function renderRouteBadge(routeId) {
   const style = state.data.routeStyles?.[routeId];
   const label = style?.label ?? routeId;
@@ -2079,664 +1697,23 @@ function renderRouteBadge(routeId) {
   return `<span class="route-badge" style="background-color:${background};color:${color}">${escapeHtml(label)}</span>`;
 }
 
-function renderNearestRouteTableRows(rows) {
-  return rows
-    .map((row) => {
-      const rowClass = row.reachable ? "" : ' class="nearest-route-row-unreachable"';
-      const stationCell = row.reachable ? escapeHtml(row.stationName) : "—";
-      const walkCell = row.reachable ? formatMinutes(row.walkMinutes) : "—";
-      const statusCell = row.reachable ? "Reachable" : "Unreachable";
-      return `<tr${rowClass}><td>${renderRouteBadge(row.routeId)}</td><td>${stationCell}</td><td>${walkCell}</td><td>${statusCell}</td></tr>`;
-    })
-    .join("");
-}
-
-const tableSortState = new Map();
-const tableRowCache = new Map();
-
-function sortRows(rows, col, dir) {
-  const sorted = rows.slice();
-  sorted.sort((a, b) => {
-    let av, bv;
-    if (col === "line") {
-      [av, bv] = [a.routeId, b.routeId];
-      const aNum = /^\d/.test(av), bNum = /^\d/.test(bv);
-      if (aNum !== bNum) return dir * (aNum ? -1 : 1);
-      if (aNum && bNum) {
-        const diff = parseInt(av, 10) - parseInt(bv, 10);
-        if (diff !== 0) return dir * diff;
-      }
-      return dir * av.localeCompare(bv);
-    }
-    if (col === "station") {
-      av = a.reachable ? a.stationName : "￿";
-      bv = b.reachable ? b.stationName : "￿";
-      return dir * av.localeCompare(bv);
-    }
-    if (col === "walk") {
-      av = a.reachable ? a.walkMinutes : Infinity;
-      bv = b.reachable ? b.walkMinutes : Infinity;
-      return dir * (av - bv);
-    }
-    if (col === "status") {
-      av = a.reachable ? 0 : 1;
-      bv = b.reachable ? 0 : 1;
-      return dir * (av - bv);
-    }
-    return 0;
-  });
-  return sorted;
-}
-
-function syncSortIndicators(table, activeCol, dir) {
-  for (const th of table.querySelectorAll("th[data-sort-col]")) {
-    const col = th.dataset.sortCol;
-    if (col === activeCol) {
-      th.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
-    } else {
-      th.removeAttribute("aria-sort");
-    }
-  }
-}
-
-function initTableSort(tbody) {
-  const table = tbody.closest("table");
-  if (!table || table.dataset.sortInit) return;
-  table.dataset.sortInit = "1";
-  for (const th of table.querySelectorAll("th[data-sort-col]")) {
-    th.querySelector(".sort-th-btn")?.addEventListener("click", () => {
-      const col = th.dataset.sortCol;
-      const cur = tableSortState.get(tbody.id);
-      const dir = cur?.col === col ? -cur.dir : 1;
-      tableSortState.set(tbody.id, { col, dir });
-      syncSortIndicators(table, col, dir);
-      const rows = tableRowCache.get(tbody.id) ?? [];
-      tbody.innerHTML = renderNearestRouteTableRows(sortRows(rows, col, dir));
-    });
-  }
-}
-
-function populateRouteTableBody(tbody, rows) {
-  tableRowCache.set(tbody.id, rows);
-  initTableSort(tbody);
-  const sort = tableSortState.get(tbody.id);
-  const displayRows = sort ? sortRows(rows, sort.col, sort.dir) : rows;
-  tbody.innerHTML = renderNearestRouteTableRows(displayRows);
-  if (sort) {
-    const table = tbody.closest("table");
-    if (table) syncSortIndicators(table, sort.col, sort.dir);
-  }
-}
-
-function syncNearestRouteTable(originPoint) {
-  const panels = [
-    { panel: nearestRoutePanel, meta: nearestRouteMeta, tbody: nearestRouteTableBody },
-    { panel: mobileNearestRoutePanel, meta: mobileNearestRouteMeta, tbody: mobileNearestRouteTableBody },
-  ].filter(({ panel }) => panel);
-
-  if (!originPoint) {
-    for (const { panel, meta, tbody } of panels) {
-      panel.hidden = true;
-      if (meta) {
-        meta.textContent = "Pin an origin to see the nearest station for each subway line.";
-      }
-      if (tbody) tbody.innerHTML = "";
-    }
-    return;
-  }
-
-  const rows = nearestStationsByRoute(originPoint);
-  const reachableCount = rows.filter((row) => row.reachable).length;
-  const summary = `${reachableCount} of ${rows.length} lines within ${MAX_WALK_TO_STATION_MINUTES} min walk`;
-
-  for (const { panel, meta, tbody } of panels) {
-    panel.hidden = false;
-    if (meta) meta.textContent = summary;
-    if (tbody) populateRouteTableBody(tbody, rows);
-  }
-}
-
-function syncProbeRouteTable(probePoint) {
-  const panels = [
-    { panel: probeRoutePanel, meta: probeRouteMeta, tbody: probeRouteTableBody },
-    { panel: mobileProbeRoutePanel, meta: mobileProbeRouteMeta, tbody: mobileProbeRouteTableBody },
-  ].filter(({ panel }) => panel);
-
-  if (!probePoint) {
-    for (const { panel, tbody } of panels) {
-      panel.hidden = true;
-      if (tbody) tbody.innerHTML = "";
-    }
-    return;
-  }
-
-  const rows = nearestStationsByRoute(probePoint);
-  const reachableCount = rows.filter((row) => row.reachable).length;
-  const summary = `${reachableCount} of ${rows.length} lines within ${MAX_WALK_TO_STATION_MINUTES} min walk`;
-
-  for (const { panel, meta, tbody } of panels) {
-    panel.hidden = false;
-    if (meta) meta.textContent = summary;
-    if (tbody) populateRouteTableBody(tbody, rows);
-  }
-}
-
-function computeWarp(origin) {
-  const { distances, prev, seeds } = runDijkstra(origin);
-  const settings = currentTravelSettings();
-  const { gridCols, gridRows, bounds } = state.data.meta;
-  const [minX, minY, maxX, maxY] = bounds;
-  const spanX = maxX - minX;
-  const spanY = maxY - minY;
-  const cellW = spanX / gridCols;
-  const cellH = spanY / gridRows;
-  const minuteGrid = Array.from({ length: gridRows }, () => new Array(gridCols).fill(Infinity));
-  const validMask = Array.from({ length: gridRows }, () => new Array(gridCols).fill(false));
-
-  for (let maskIndex = 0; maskIndex < state.data.mask.length; maskIndex += 1) {
-    const cellIndex = state.data.mask[maskIndex];
-    if (cellIndex === -1) continue;
-    const cell = state.data.cells[cellIndex];
-    let bestMinutes =
-      distance(origin.point, cell.point) / settings.walkingSpeed + origin.swimMinutes;
-    for (const [stationIndex] of cell.access) {
-      const egressMinutes =
-        distance(cell.point, state.data.stations[stationIndex].point) / settings.walkingSpeed +
-        state.data.meta.stationAccessPenalty;
-      for (const routeStateIndex of state.data.stationStates[stationIndex] || []) {
-        bestMinutes = Math.min(bestMinutes, distances[routeStateIndex] + egressMinutes);
-      }
-    }
-    minuteGrid[cell.row][cell.col] = bestMinutes;
-    validMask[cell.row][cell.col] = true;
-  }
-
-  let smoothedMinutes = minuteGrid.map((row) => row.slice());
-  for (let pass = 0; pass < WEIGHT_BLUR_PASSES; pass += 1) {
-    const nextMinutes = Array.from({ length: gridRows }, () => new Array(gridCols).fill(Infinity));
-    for (let row = 0; row < gridRows; row += 1) {
-      for (let col = 0; col < gridCols; col += 1) {
-        if (!validMask[row][col]) continue;
-        let totalMinutes = 0;
-        let count = 0;
-        for (let y = Math.max(0, row - WEIGHT_BLUR_RADIUS); y <= Math.min(gridRows - 1, row + WEIGHT_BLUR_RADIUS); y += 1) {
-          for (let x = Math.max(0, col - WEIGHT_BLUR_RADIUS); x <= Math.min(gridCols - 1, col + WEIGHT_BLUR_RADIUS); x += 1) {
-            if (!validMask[y][x]) continue;
-            totalMinutes += smoothedMinutes[y][x];
-            count += 1;
-          }
-        }
-        nextMinutes[row][col] = count ? totalMinutes / count : smoothedMinutes[row][col];
-      }
-    }
-    smoothedMinutes = nextMinutes;
-  }
-
-  const areaWeights = Array.from({ length: gridRows }, () => new Array(gridCols).fill(0));
-  const anomalyGrid = Array.from({ length: gridRows }, () => new Array(gridCols).fill(0));
-
-  for (let row = 0; row < gridRows; row += 1) {
-    for (let col = 0; col < gridCols; col += 1) {
-      if (!validMask[row][col]) continue;
-      const areaWeight = minuteToAreaWeight(smoothedMinutes[row][col]);
-      areaWeights[row][col] = areaWeight;
-      anomalyGrid[row][col] = areaWeight - 1;
-    }
-  }
-
-  const reachability = summarizeReachability(origin, distances);
-
-  const warpNodes = Array.from({ length: gridRows + 1 }, () => new Array(gridCols + 1).fill(null));
-  const sigmaSq = WARP_SIGMA_CELLS * WARP_SIGMA_CELLS;
-  const maxShiftX = cellW * WARP_MAX_SHIFT_CELLS;
-  const maxShiftY = cellH * WARP_MAX_SHIFT_CELLS;
-
-  for (let nodeRow = 0; nodeRow <= gridRows; nodeRow += 1) {
-    for (let nodeCol = 0; nodeCol <= gridCols; nodeCol += 1) {
-      const baseX = minX + nodeCol * cellW;
-      const baseY = minY + nodeRow * cellH;
-      let offsetX = 0;
-      let offsetY = 0;
-
-      const rowStart = Math.max(0, nodeRow - WARP_INFLUENCE_RADIUS);
-      const rowEnd = Math.min(gridRows - 1, nodeRow + WARP_INFLUENCE_RADIUS - 1);
-      const colStart = Math.max(0, nodeCol - WARP_INFLUENCE_RADIUS);
-      const colEnd = Math.min(gridCols - 1, nodeCol + WARP_INFLUENCE_RADIUS - 1);
-
-      for (let row = rowStart; row <= rowEnd; row += 1) {
-        for (let col = colStart; col <= colEnd; col += 1) {
-          if (!validMask[row][col]) continue;
-          const anomaly = anomalyGrid[row][col];
-          if (Math.abs(anomaly) < 1e-6) continue;
-          const centerX = minX + (col + 0.5) * cellW;
-          const centerY = minY + (row + 0.5) * cellH;
-          const dxCells = (baseX - centerX) / cellW;
-          const dyCells = (baseY - centerY) / cellH;
-          const distSqCells = dxCells * dxCells + dyCells * dyCells;
-          const distCells = Math.sqrt(distSqCells + 1e-9);
-          const gaussian = Math.exp(-distSqCells / (2 * sigmaSq));
-          const strength = anomaly * gaussian * WARP_DISPLACEMENT_SCALE;
-          offsetX += (dxCells / distCells) * strength * cellW;
-          offsetY += (dyCells / distCells) * strength * cellH;
-        }
-      }
-
-      offsetX = clamp(offsetX, -maxShiftX, maxShiftX);
-      offsetY = clamp(offsetY, -maxShiftY, maxShiftY);
-
-      const edgeDistance = Math.min(nodeCol, gridCols - nodeCol, nodeRow, gridRows - nodeRow);
-      const edgeFade = smoothstep(0, WARP_EDGE_FADE_CELLS, edgeDistance);
-      warpNodes[nodeRow][nodeCol] = [baseX + offsetX * edgeFade, baseY + offsetY * edgeFade];
-    }
-  }
-
-  for (let pass = 0; pass < WARP_NODE_SMOOTHING_PASSES; pass += 1) {
-    const nextNodes = warpNodes.map((row) => row.map((point) => point.slice()));
-    for (let nodeRow = 1; nodeRow < gridRows; nodeRow += 1) {
-      for (let nodeCol = 1; nodeCol < gridCols; nodeCol += 1) {
-        let totalX = 0;
-        let totalY = 0;
-        let count = 0;
-        for (let y = nodeRow - 1; y <= nodeRow + 1; y += 1) {
-          for (let x = nodeCol - 1; x <= nodeCol + 1; x += 1) {
-            totalX += warpNodes[y][x][0];
-            totalY += warpNodes[y][x][1];
-            count += 1;
-          }
-        }
-        const edgeDistance = Math.min(nodeCol, gridCols - nodeCol, nodeRow, gridRows - nodeRow);
-        const edgeFade = smoothstep(0, WARP_EDGE_FADE_CELLS, edgeDistance);
-        const smoothedX = totalX / count;
-        const smoothedY = totalY / count;
-        nextNodes[nodeRow][nodeCol] = [
-          lerp(minX + nodeCol * cellW, smoothedX, 0.72 * edgeFade),
-          lerp(minY + nodeRow * cellH, smoothedY, 0.72 * edgeFade),
-        ];
-      }
-    }
-    for (let nodeRow = 0; nodeRow <= gridRows; nodeRow += 1) {
-      for (let nodeCol = 0; nodeCol <= gridCols; nodeCol += 1) {
-        warpNodes[nodeRow][nodeCol] = nextNodes[nodeRow][nodeCol];
-      }
-    }
-  }
-
-  function warpPoint(point) {
-    const clampedX = clamp(point[0], minX, maxX);
-    const clampedY = clamp(point[1], minY, maxY);
-    const rawCol = clamp((clampedX - minX) / cellW, 0, gridCols - 1e-9);
-    const rawRow = clamp((clampedY - minY) / cellH, 0, gridRows - 1e-9);
-    const col = clamp(Math.floor(rawCol), 0, gridCols - 1);
-    const row = clamp(Math.floor(rawRow), 0, gridRows - 1);
-    const tx = rawCol - col;
-    const ty = rawRow - row;
-    return bilerpPoint(
-      warpNodes[row][col],
-      warpNodes[row][col + 1],
-      warpNodes[row + 1][col],
-      warpNodes[row + 1][col + 1],
-      tx,
-      ty,
-    );
-  }
-
-  function inverseWarpPoint(point) {
-    const approximate = (() => {
-      let guess = [point[0], point[1]];
-      for (let iteration = 0; iteration < 6; iteration += 1) {
-        const projected = warpPoint(guess);
-        guess = [
-          clamp(guess[0] + (point[0] - projected[0]), minX, maxX),
-          clamp(guess[1] + (point[1] - projected[1]), minY, maxY),
-        ];
-      }
-      return guess;
-    })();
-
-    const approxCol = clamp(Math.floor((approximate[0] - minX) / cellW), 0, gridCols - 1);
-    const approxRow = clamp(Math.floor((approximate[1] - minY) / cellH), 0, gridRows - 1);
-
-    function solveCell(row, col) {
-      if (row < 0 || row >= gridRows || col < 0 || col >= gridCols) return null;
-      const p00 = warpNodes[row][col];
-      const p10 = warpNodes[row][col + 1];
-      const p11 = warpNodes[row + 1][col + 1];
-      const p01 = warpNodes[row + 1][col];
-
-      const upperWeights = barycentricWeights(point, p00, p10, p11);
-      if (upperWeights) {
-        return interpolateTriangle(
-          upperWeights,
-          [minX + col * cellW, minY + row * cellH],
-          [minX + (col + 1) * cellW, minY + row * cellH],
-          [minX + (col + 1) * cellW, minY + (row + 1) * cellH],
-        );
-      }
-
-      const lowerWeights = barycentricWeights(point, p00, p11, p01);
-      if (lowerWeights) {
-        return interpolateTriangle(
-          lowerWeights,
-          [minX + col * cellW, minY + row * cellH],
-          [minX + (col + 1) * cellW, minY + (row + 1) * cellH],
-          [minX + col * cellW, minY + (row + 1) * cellH],
-        );
-      }
-
-      return null;
-    }
-
-    for (let radius = 0; radius <= 8; radius += 1) {
-      for (let row = approxRow - radius; row <= approxRow + radius; row += 1) {
-        for (let col = approxCol - radius; col <= approxCol + radius; col += 1) {
-          if (radius > 0 && row > approxRow - radius && row < approxRow + radius && col > approxCol - radius && col < approxCol + radius) {
-            continue;
-          }
-          const solved = solveCell(row, col);
-          if (solved) return solved;
-        }
-      }
-    }
-
-    for (let row = 0; row < gridRows; row += 1) {
-      for (let col = 0; col < gridCols; col += 1) {
-        const solved = solveCell(row, col);
-        if (solved) return solved;
-      }
-    }
-
-    return approximate;
-  }
-
-  const allWarpedNodes = warpNodes.flat();
-  const xs = allWarpedNodes.map((point) => point[0]);
-  const ys = allWarpedNodes.map((point) => point[1]);
-  const warpedBounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
-  const expansion = Array.from({ length: gridRows }, () => new Array(gridCols).fill(0));
-  for (let row = 0; row < gridRows; row += 1) {
-    for (let col = 0; col < gridCols; col += 1) {
-      if (!validMask[row][col]) continue;
-      expansion[row][col] =
-        quadArea(
-          warpNodes[row][col],
-          warpNodes[row][col + 1],
-          warpNodes[row + 1][col + 1],
-          warpNodes[row + 1][col],
-        ) / (cellW * cellH);
-    }
-  }
-
-  return {
-    distances,
-    prev,
-    seeds,
-    reachability,
-    warpPoint,
-    inverseWarpPoint,
-    warpedBounds,
-    warpNodes,
-    minutes: smoothedMinutes,
-    expansion,
-    areaWeights,
-    validMask,
-  };
-}
-
-function drawHeatmap(drawCtx, warp, transform, useWarpGeometry = true) {
-  const { gridCols, gridRows, bounds } = state.data.meta;
-  const { width, height } = mapCanvas.getBoundingClientRect();
-  const scale = HEATMAP_RESOLUTION_SCALE;
-  const rawCanvas = document.createElement("canvas");
-  rawCanvas.width = Math.max(1, Math.round(width * scale));
-  rawCanvas.height = Math.max(1, Math.round(height * scale));
-  const rawCtx = rawCanvas.getContext("2d");
-  rawCtx.setTransform(scale, 0, 0, scale, 0, 0);
-  rawCtx.imageSmoothingEnabled = true;
-  const [minX, minY, maxX, maxY] = bounds;
-  const cellW = (maxX - minX) / gridCols;
-  const cellH = (maxY - minY) / gridRows;
-
-  for (let row = 0; row < gridRows; row += 1) {
-    for (let col = 0; col < gridCols; col += 1) {
-      if (!warp.validMask[row][col]) continue;
-      rawCtx.fillStyle = heatmapColor(warp.minutes[row][col], 1);
-      if (useWarpGeometry) {
-        const p00 = transform.toScreen(warp.warpNodes[row][col]);
-        const p10 = transform.toScreen(warp.warpNodes[row][col + 1]);
-        const p11 = transform.toScreen(warp.warpNodes[row + 1][col + 1]);
-        const p01 = transform.toScreen(warp.warpNodes[row + 1][col]);
-        rawCtx.beginPath();
-        rawCtx.moveTo(p00[0], p00[1]);
-        rawCtx.lineTo(p10[0], p10[1]);
-        rawCtx.lineTo(p11[0], p11[1]);
-        rawCtx.lineTo(p01[0], p01[1]);
-        rawCtx.closePath();
-        rawCtx.fill();
-      } else {
-        const x0 = minX + col * cellW;
-        const y0 = minY + row * cellH;
-        const x1 = x0 + cellW;
-        const y1 = y0 + cellH;
-        const left = transform.toScreen([x0, y0])[0];
-        const right = transform.toScreen([x1, y0])[0];
-        const top = transform.toScreen([x0, y1])[1];
-        const bottom = transform.toScreen([x0, y0])[1];
-        rawCtx.fillRect(left, top, Math.max(1, right - left), Math.max(1, bottom - top));
-      }
-    }
-  }
-
-  const blurredCanvas = document.createElement("canvas");
-  blurredCanvas.width = rawCanvas.width;
-  blurredCanvas.height = rawCanvas.height;
-  const blurredCtx = blurredCanvas.getContext("2d");
-  blurredCtx.setTransform(scale, 0, 0, scale, 0, 0);
-  blurredCtx.imageSmoothingEnabled = true;
-  blurredCtx.filter = `blur(${HEATMAP_BLUR_PX}px)`;
-  blurredCtx.drawImage(rawCanvas, 0, 0, width, height);
-  blurredCtx.filter = "none";
-
-  const maskedCanvas = document.createElement("canvas");
-  maskedCanvas.width = rawCanvas.width;
-  maskedCanvas.height = rawCanvas.height;
-  const maskedCtx = maskedCanvas.getContext("2d");
-  maskedCtx.setTransform(scale, 0, 0, scale, 0, 0);
-  maskedCtx.imageSmoothingEnabled = true;
-  maskedCtx.save();
-  traceLandMaskPath(maskedCtx, (point) => transform.toScreen(useWarpGeometry ? warp.warpPoint(point) : point));
-  maskedCtx.clip("evenodd");
-  maskedCtx.drawImage(blurredCanvas, 0, 0, width, height);
-  maskedCtx.restore();
-
-  drawCtx.save();
-  drawCtx.globalCompositeOperation = "multiply";
-  drawCtx.globalAlpha = HEATMAP_ALPHA;
-  drawCtx.imageSmoothingEnabled = true;
-  drawCtx.drawImage(maskedCanvas, 0, 0, width, height);
-  drawCtx.restore();
-}
-
-function drawReachabilityOutline(drawCtx, warp, transform, useWarpGeometry = true) {
-  const threshold = currentTravelSettings().maxTransitTime;
-  const { gridCols, gridRows, bounds } = state.data.meta;
-  const [minX, minY, maxX, maxY] = bounds;
-  const cellW = (maxX - minX) / gridCols;
-  const cellH = (maxY - minY) / gridRows;
-  const isReachable = (row, col) =>
-    row >= 0 &&
-    row < gridRows &&
-    col >= 0 &&
-    col < gridCols &&
-    warp.validMask[row][col] &&
-    warp.minutes[row][col] <= threshold;
-
-  const cellCorner = (row, col) => {
-    if (useWarpGeometry) {
-      return warp.warpNodes[row][col];
-    }
-    return [minX + col * cellW, minY + row * cellH];
-  };
-
-  const drawEdge = (start, end) => {
-    const [sx, sy] = transform.toScreen(start);
-    const [ex, ey] = transform.toScreen(end);
-    drawCtx.moveTo(sx, sy);
-    drawCtx.lineTo(ex, ey);
-  };
-
-  drawCtx.save();
-  drawCtx.lineJoin = "round";
-  drawCtx.lineCap = "round";
-
-  drawCtx.beginPath();
-  for (let row = 0; row < gridRows; row += 1) {
-    for (let col = 0; col < gridCols; col += 1) {
-      if (!isReachable(row, col)) continue;
-
-      if (!isReachable(row - 1, col)) {
-        drawEdge(cellCorner(row, col), cellCorner(row, col + 1));
-      }
-      if (!isReachable(row, col + 1)) {
-        drawEdge(cellCorner(row, col + 1), cellCorner(row + 1, col + 1));
-      }
-      if (!isReachable(row + 1, col)) {
-        drawEdge(cellCorner(row + 1, col + 1), cellCorner(row + 1, col));
-      }
-      if (!isReachable(row, col - 1)) {
-        drawEdge(cellCorner(row + 1, col), cellCorner(row, col));
-      }
-    }
-  }
-
-  drawCtx.strokeStyle = "rgba(255, 248, 239, 0.95)";
-  drawCtx.lineWidth = 5;
-  drawCtx.stroke();
-
-  drawCtx.strokeStyle = "rgba(215, 92, 46, 0.98)";
-  drawCtx.lineWidth = 2.5;
-  drawCtx.stroke();
-  drawCtx.restore();
-}
-
-// Does most of the drawing.
 function drawMap(drawCtx, width, height) {
   drawPanelBackground(drawCtx, width, height);
   if (!state.transform) return;
 
-  if (!state.originPoint) {
-    const projectPoint = (point) => state.transform.toScreen(point);
-    drawExternalLand(drawCtx, projectPoint);
-    drawCityBasemap(drawCtx, projectPoint);
-    drawStations(drawCtx, projectPoint);
-    drawBoroughLabels(drawCtx, projectPoint);
-    if (state.cursorScreen && state.placingOrigin) {
-      drawEmojiMarker(drawCtx, ...state.cursorScreen, "📍", 22);
-    }
+  const transform = offsetTransform(state.transform, state.panOffsetPx[0], state.panOffsetPx[1]);
+  const projectPoint = (point) => transform.toScreen(point);
+  state.currentRender = { transform, anchorOffset: [0, 0], projectPoint };
 
-    statusText.textContent = "Click \"Set origin\" to place your starting point.";
-    state.currentRender = {
-      warp: {
-        inverseWarpPoint: (point) => point,
-        distances: null,
-        reachability: null,
-        seeds: [],
-      },
-      transform: state.transform,
-      anchorOffset: [0, 0],
-      projectPoint,
-    };
-    syncReachabilityScore();
-    syncNearestRouteTable();
-    syncMobileSheet();
-    return;
-  }
-
-  const normalizedOrigin = normalizeTravelPoint(state.originPoint);
-  const warp = computeWarp(normalizedOrigin);
-  state.latestWarp = warp;
-  const baseTransform = state.transform;
-  const warpPoint = state.showWarp && warp ? warp.warpPoint : (point) => point;
-  const inverseWarpPoint = warp ? warp.inverseWarpPoint : (point) => point;
-  const warpedBounds = state.showWarp && warp ? warp.warpedBounds : state.data.meta.bounds;
-  const zoomFocusPoint = state.viewportScale > MIN_VIEWPORT_SCALE ? currentZoomFocusPoint() : null;
-  const anchorScreen = zoomFocusPoint
-    ? [width / 2, height / 2]
-    : state.showWarp && state.pinned && !state.isMobile
-      ? state.pinnedScreen
-      : null;
-  const anchorWorldPoint = zoomFocusPoint || state.originPoint;
-  const anchoredOrigin = baseTransform.toScreen(warpPoint(anchorWorldPoint));
-  const [warpMinX, warpMinY, warpMaxX, warpMaxY] = warpedBounds;
-  const topLeft = baseTransform.toScreen([warpMinX, warpMaxY]);
-  const bottomRight = baseTransform.toScreen([warpMaxX, warpMinY]);
-  const leftBound = topLeft[0];
-  const topBound = topLeft[1];
-  const rightBound = bottomRight[0];
-  const bottomBound = bottomRight[1];
-  const desiredDx = anchorScreen ? anchorScreen[0] - anchoredOrigin[0] : 0;
-  const desiredDy = anchorScreen ? anchorScreen[1] - anchoredOrigin[1] : 0;
-  const minDx = PANEL_PADDING - leftBound;
-  const maxDx = width - PANEL_PADDING - rightBound;
-  const minDy = PANEL_PADDING - topBound;
-  const maxDy = height - PANEL_PADDING - bottomBound;
-  const dx = zoomFocusPoint ? desiredDx : clampToRange(desiredDx, minDx, maxDx);
-  const dy = zoomFocusPoint ? desiredDy : clampToRange(desiredDy, minDy, maxDy);
-  const transform = offsetTransform(baseTransform, dx + state.panOffsetPx[0], dy + state.panOffsetPx[1]);
-  const projectPoint = (point) => transform.toScreen(warpPoint(point));
-  const externalLandProjectPoint = (point) => transform.toScreen(point);
-  const lineCurveOptions = state.showWarp
-    ? {
-        streetCurveTolerance: WARP_LINE_CURVE_TOLERANCE_PX,
-        routeCurveTolerance: WARP_LINE_CURVE_TOLERANCE_PX,
-        curveMaxDepth: WARP_LINE_MAX_SUBDIVISION_DEPTH,
-      }
-    : {};
-  state.currentRender = {
-    warp: {
-      inverseWarpPoint: state.showWarp ? inverseWarpPoint : (point) => point,
-      distances: warp?.distances ?? null,
-      reachability: warp?.reachability ?? null,
-      seeds: warp?.seeds ?? [],
-      origin: normalizedOrigin,
-    },
-    transform,
-    anchorOffset: [dx, dy],
-    projectPoint,
-  };
-  syncReachabilityScore(warp?.reachability ?? null);
-  syncNearestRouteTable(state.originPoint);
-  if (state.probePoint && warp) {
-    state.optimalPathResult = traceOptimalPath(normalizedOrigin, warp, state.probePoint);
-  } else {
-    state.optimalPathResult = null;
-  }
-  if (optimalAccordionContainer) optimalAccordionContainer.innerHTML = renderOptimalPathAccordion();
-
-  drawExternalLand(drawCtx, externalLandProjectPoint);
-  drawCityBasemap(drawCtx, projectPoint, {
-    includeBoroughBorders: !state.showWarp,
-    ...lineCurveOptions,
-  });
-
-  if (state.showHeatmap && warp) {
-    drawHeatmap(drawCtx, warp, transform, state.showWarp);
-  }
-
-  if (state.showReachOutline && warp) {
-    drawReachabilityOutline(drawCtx, warp, transform, state.showWarp);
-  }
-
-  const nearest = warp?.seeds?.[0] ?? null;
-  const station = nearest ? state.data.stations[nearest.index] : null;
-
+  drawExternalLand(drawCtx, projectPoint);
+  drawCityBasemap(drawCtx, projectPoint);
   drawStations(drawCtx, projectPoint);
   drawBoroughLabels(drawCtx, projectPoint);
 
-  // Routing.
   if (state.originPoint) {
     const originScreen = projectPoint(state.originPoint);
     drawEmojiMarker(drawCtx, ...originScreen, "📍", 26);
-    drawPinnedLabel(drawCtx, originScreen, currentOriginSummary(station?.name ?? "NYC subway"));
+    drawPinnedLabel(drawCtx, originScreen, currentOriginSummary());
   } else if (state.cursorScreen && state.placingOrigin) {
     drawEmojiMarker(drawCtx, ...state.cursorScreen, "📍", 22);
   }
@@ -2750,37 +1727,25 @@ function drawMap(drawCtx, width, height) {
   drawRoutePath(drawCtx, projectPoint);
 
   const activeProbePoint = state.probePoint || (state.isMobile ? null : state.cursorPoint);
-  const activeProbeScreen = state.probePoint
-    ? projectPoint(state.probePoint)
-    : state.isMobile
-      ? null
-      : state.cursorScreen;
   if (state.originPoint && activeProbePoint) {
-    // This is how the routing is done.
-    const probe = measureProbeFromWarp(normalizedOrigin, warp, activeProbePoint);
-    statusText.textContent = station ? `Pinned near ${station.name}` : "Pinned origin";
-    if (probe) {
+    statusText.textContent = "Origin pinned";
+    const activeEval = state.routeOptionEvals?.[state.activeRouteOptionIndex];
+    if (activeEval?.viable) {
       mapDistanceOverlay.hidden = false;
-      mapDistanceOptimal.textContent = `✨ Optimal: ${formatDistanceLabel(probe.baseMinutes, probe.swimMinutes)}`;
-      const activeEval = state.routeOptionEvals?.[state.activeRouteOptionIndex];
-      if (activeEval?.viable) {
-        const walkMins = activeEval.steps.filter(s => s.kind === "walk").reduce((a, s) => a + s.minutes, 0);
-        const rideMins = activeEval.steps.filter(s => s.kind === "ride").reduce((a, s) => a + s.minutes, 0);
-        const seq = activeEval.routeIds;
-        mapDistanceRoute.textContent = `🚆 ${seq.join("→")}: ${formatMinutes(activeEval.totalMinutes)} (${Math.round(rideMins)}m train + ${Math.round(walkMins)}m walk)`;
-        mapDistanceRoute.hidden = false;
-      } else {
-        mapDistanceRoute.hidden = true;
-      }
+      const walkMins = activeEval.steps.filter(s => s.kind === "walk").reduce((a, s) => a + s.minutes, 0);
+      const rideMins = activeEval.steps.filter(s => s.kind === "ride").reduce((a, s) => a + s.minutes, 0);
+      const waitMins = activeEval.steps.filter(s => s.kind === "wait" || s.kind === "transfer").reduce((a, s) => a + s.minutes, 0);
+      const seq = activeEval.routeIds;
+      mapDistanceRoute.textContent = `🚆 ${seq.join("→")}: ${formatMinutes(activeEval.totalMinutes)} (${Math.round(rideMins)}m train + ${Math.round(waitMins)}m wait + ${Math.round(walkMins)}m walk)`;
+      mapDistanceRoute.hidden = false;
+    } else {
+      mapDistanceOverlay.hidden = true;
     }
   } else {
     mapDistanceOverlay.hidden = true;
-    statusText.textContent = station
-      ? `${state.showWarp ? "Warped" : "Shown"} from near ${station.name}`
-      : state.showWarp
-        ? "Warped commute-time view"
-        : "Geographic commute-time view";
+    statusText.textContent = state.originPoint ? "Origin pinned" : "Set an origin to compare routes.";
   }
+
   syncMobileSheet();
 }
 
@@ -2895,26 +1860,6 @@ function drawPinnedLabel(drawCtx, screenPoint, label, options = {}) {
   drawCtx.restore();
 }
 
-// Estimate the travel.
-function measureProbeFromWarp(normalizedOrigin, warp, probePoint) {
-  if (!normalizedOrigin || !probePoint) return null;
-  if (warp?.distances) {
-    return estimateTravel(normalizedOrigin, warp.distances, probePoint);
-  }
-  const settings = currentTravelSettings();
-  const destination = normalizeTravelPoint(probePoint);
-  const swimMinutes = normalizedOrigin.swimMinutes + destination.swimMinutes;
-  const minutes =
-    distance(normalizedOrigin.point, destination.point) / settings.walkingSpeed +
-    swimMinutes;
-  return {
-    minutes,
-    baseMinutes: minutes - swimMinutes,
-    swimMinutes,
-    destination,
-  };
-}
-
 function roundRectPath(drawCtx, x, y, width, height, radius) {
   drawCtx.beginPath();
   drawCtx.roundRect(x, y, width, height, radius);
@@ -3008,12 +1953,7 @@ function exportShareImage() {
   exportCtx.font = '700 58px "Avenir Next", "Helvetica Neue", Helvetica, sans-serif';
   exportCtx.fillText("New York City", 72, 146);
 
-  const nearestSeed = state.currentRender?.warp?.seeds?.[0];
-  const nearestStationName = nearestSeed ? state.data.stations[nearestSeed.index].name : "NYC subway";
   const normalizedOrigin = state.originPoint ? normalizeTravelPoint(state.originPoint) : null;
-  const probeMeasurement = state.probePoint
-    ? measureProbeFromWarp(normalizedOrigin, state.currentRender?.warp ?? null, state.probePoint)
-    : null;
 
   const cardX = 50;
   const cardY = 198;
@@ -3058,95 +1998,14 @@ function exportShareImage() {
         mapX + ((originScreen[0] - sourceXCss) / sourceSquareCss) * mapSize,
         mapY + ((originScreen[1] - sourceYCss) / sourceSquareCss) * mapSize,
       ],
-      currentOriginSummary(nearestStationName),
+      currentOriginSummary(),
     );
-  }
-  if (probeMeasurement && state.currentRender?.projectPoint && state.probePoint) {
-    const probeScreen = state.currentRender.projectPoint(state.probePoint);
-    drawHoverTooltip(
-      exportCtx,
-      [
-        mapX + ((probeScreen[0] - sourceXCss) / sourceSquareCss) * mapSize,
-        mapY + ((probeScreen[1] - sourceYCss) / sourceSquareCss) * mapSize,
-      ],
-      formatDistanceLabel(probeMeasurement.baseMinutes, probeMeasurement.swimMinutes),
-    );
-  }
-
-  const reachability = state.currentRender?.warp?.reachability ?? null;
-  if (reachability) {
-    const badgeX = mapX + 26;
-    const badgeY = mapY + 24;
-    const badgeWidth = 310;
-    const badgeHeight = 110;
-    const percent = Math.round(reachability.ratio * 100);
-
-    exportCtx.fillStyle = "rgba(255, 252, 247, 0.9)";
-    exportCtx.beginPath();
-    exportCtx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 22);
-    exportCtx.fill();
-
-    exportCtx.strokeStyle = "rgba(23, 48, 77, 0.12)";
-    exportCtx.lineWidth = 1.5;
-    exportCtx.stroke();
-
-    exportCtx.fillStyle = "#5f6f7f";
-    exportCtx.font = '700 17px "Avenir Next", "Helvetica Neue", Helvetica, sans-serif';
-    exportCtx.fillText("60-MINUTE REACH", badgeX + 20, badgeY + 26);
-
-    exportCtx.fillStyle = "#17304d";
-    exportCtx.font = '700 42px "Avenir Next", "Helvetica Neue", Helvetica, sans-serif';
-    exportCtx.fillText(
-      `${reachability.reachableStations} / ${reachability.totalStations}`,
-      badgeX + 20,
-      badgeY + 68,
-    );
-
-    exportCtx.fillStyle = "#5f6f7f";
-    exportCtx.font = '500 18px "Avenir Next", "Helvetica Neue", Helvetica, sans-serif';
-    exportCtx.fillText(`${percent}% of stations within 60 min`, badgeX + 20, badgeY + 94);
   }
   exportCtx.restore();
 
-  if (state.showHeatmap) {
-    const maxTransitTime = currentTravelSettings().maxTransitTime;
-    const legendWidth = 360;
-    const leftLabelWidth = 50;
-    const rightLabelWidth = 80;
-    const legendX = cardX + cardSize - inset - legendWidth - 10;
-    const legendY = cardY + cardSize - inset - 30;
-    const legendLineX = legendX + leftLabelWidth;
-    const legendLineY = legendY;
-    const legendLineWidth = legendWidth - leftLabelWidth - rightLabelWidth;
-
-    exportCtx.font = '600 23px "Avenir Next", "Helvetica Neue", Helvetica, sans-serif';
-    exportCtx.textBaseline = "middle";
-    exportCtx.fillStyle = "#17304d";
-    exportCtx.fillText("0m", legendX, legendY);
-
-    const legendGradient = exportCtx.createLinearGradient(legendLineX, legendLineY, legendLineX + legendLineWidth, legendLineY);
-    legendGradient.addColorStop(0, "#dc4525");
-    legendGradient.addColorStop(0.18, "#f47f2e");
-    legendGradient.addColorStop(0.36, "#ffc44f");
-    legendGradient.addColorStop(0.58, "#f8e89c");
-    legendGradient.addColorStop(0.78, "#95bcd3");
-    legendGradient.addColorStop(1, "#4a678d");
-    exportCtx.strokeStyle = legendGradient;
-    exportCtx.lineWidth = 16;
-    exportCtx.lineCap = "round";
-    exportCtx.beginPath();
-    exportCtx.moveTo(legendLineX, legendLineY);
-    exportCtx.lineTo(legendLineX + legendLineWidth, legendLineY);
-    exportCtx.stroke();
-
-    exportCtx.textAlign = "right";
-    exportCtx.fillText(`${Math.round(maxTransitTime)}m`, legendX + legendWidth, legendY);
-    exportCtx.textAlign = "left";
-  }
-
   exportCtx.fillStyle = "#17304d";
   exportCtx.font = '700 24px "Avenir Next", "Helvetica Neue", Helvetica, sans-serif';
-  exportCtx.fillText("castrio.me/nyc", 72, 1202);
+  exportCtx.fillText("nyc-cartogram", 72, 1202);
 
   exportCtx.textAlign = "right";
   exportCtx.fillStyle = "#5f6f7f";
@@ -3256,11 +2115,9 @@ function updateViewportTransform() {
     state.viewportScale,
     activeViewportCenter(),
   );
-  state.baseMapCache = null;
   state.dirty = true;
   syncZoomControls();
   syncMobileSheet();
-  syncMobileHelp();
   requestDraw();
 }
 
@@ -3287,10 +2144,7 @@ function pointerToWorld(event) {
   if (!state.currentRender) {
     return { screenPoint, worldPoint: state.transform.toWorld(x, y) };
   }
-  // Screen space is fixed, but the visible geography is warped. To recover the
-  // geographic point under the cursor, invert the warp currently on screen.
-  const warpedWorld = state.currentRender.transform.toWorld(x, y);
-  const worldPoint = state.currentRender.warp.inverseWarpPoint(warpedWorld);
+  const worldPoint = state.currentRender.transform.toWorld(x, y);
   return { screenPoint, worldPoint };
 }
 
@@ -3321,7 +2175,6 @@ function hitPinTarget(screenPoint, hitRadius = MOBILE_PIN_HIT_RADIUS) {
 function setProbePoint(worldPoint) {
   state.probePoint = worldPoint;
   state.probePinned = Boolean(worldPoint);
-  syncProbeRouteTable(worldPoint);
   syncRouteBuilderPanel();
   syncPinSummary();
 }
@@ -3330,7 +2183,6 @@ function clearProbePoint() {
   state.probePoint = null;
   state.probePinned = false;
   state.probeLabel = null;
-  syncProbeRouteTable(null);
   syncRouteBuilderPanel();
   syncBrowserUrl();
   syncPinSummary();
@@ -3411,7 +2263,7 @@ function handleMobilePointerDown(event) {
   if (!state.isMobile) return;
   closeSharePanel();
   closeSettingsMenus();
-  collapseMobileHelp();
+
   const { screenPoint, worldPoint } = pointerToWorld(event);
   if (!withinBounds(worldPoint)) return;
   beginPinGesture(event.pointerId, screenPoint, worldPoint, MOBILE_PIN_HIT_RADIUS);
@@ -3489,7 +2341,7 @@ function handleDesktopPointerDown(event) {
   if (state.isMobile) return;
   closeSharePanel();
   closeSettingsMenus();
-  collapseMobileHelp();
+
   const { screenPoint, worldPoint } = pointerToWorld(event);
   if (!withinBounds(worldPoint)) return;
   beginPinGesture(event.pointerId, screenPoint, worldPoint, DESKTOP_PIN_HIT_RADIUS);
@@ -3578,13 +2430,6 @@ function withinBounds(point) {
   return point[0] >= minX && point[0] <= maxX && point[1] >= minY && point[1] <= maxY;
 }
 
-function syncHeatmapLegend() {
-  const maxTransitTime = currentTravelSettings().maxTransitTime;
-  heatmapLegend.hidden = !state.showHeatmap;
-  heatmapLegendMin.textContent = "0m";
-  heatmapLegendMax.textContent = `${Math.round(maxTransitTime)}m`;
-}
-
 function syncFullscreenButton() {
   const isFullscreen = document.fullscreenElement === panelCard;
   panelCard.classList.toggle("is-immersive", isFullscreen);
@@ -3635,23 +2480,17 @@ function clearPinnedOrigin() {
 function syncMobileSheet() {
   if (!mobileOriginTitle || !mobileStatusText || !mobileClearButton) return;
 
-  const nearestSeed = state.currentRender?.warp?.seeds?.[0] ?? null;
-  const nearestStation = nearestSeed ? state.data?.stations?.[nearestSeed.index] : null;
-
   if (!state.pinned || !state.originPoint) {
-    mobileOriginTitle.textContent = state.cursorScreen ? "Release to pin the origin" : "Drag to preview an origin";
-    mobileStatusText.textContent =
-      "Touch and drag on the map to preview your starting point. Release to pin it, then drag again to measure commute times elsewhere.";
+    mobileOriginTitle.textContent = state.cursorScreen ? "Release to pin the origin" : "Drag to set origin";
+    mobileStatusText.textContent = "Touch and drag on the map to place your starting point.";
     mobileClearButton.hidden = true;
     return;
   }
 
-  mobileOriginTitle.textContent = state.originLabel || (nearestStation ? `Pinned near ${nearestStation.name}` : "Pinned origin");
+  mobileOriginTitle.textContent = state.originLabel || "Pinned origin";
   mobileStatusText.textContent = state.probePoint
     ? "Drag either pin to reposition it. Tap a pin without dragging to remove it."
-    : nearestStation
-      ? `Commute times are anchored near ${nearestStation.name}. Drag on the map to place a "distance to here" pin.`
-      : 'Commute times are anchored to this origin. Drag on the map to place a "distance to here" pin.';
+    : 'Origin pinned. Drag on the map to place a destination pin.';
   mobileClearButton.hidden = false;
 }
 
@@ -3729,7 +2568,7 @@ async function searchAddress(query) {
 
 function setLocateButtonsBusy(isBusy) {
   const label = isBusy ? "Locating…" : "Use My Location";
-  for (const button of [mobileLocateButton, mobileInstructionsLocateButton]) {
+  for (const button of [mobileLocateButton]) {
     if (!button) continue;
     button.disabled = isBusy;
     button.textContent = label;
@@ -3776,7 +2615,6 @@ async function init() {
   state.dynamicAdjacency = buildDynamicAdjacency();
   state.routeStationIndex = buildRouteStationIndex();
   state.isMobile = isMobileLayout();
-  state.baseMapCache = null;
   state.ready = true;
 
   const manhattan = state.data.boroughs.find((borough) => borough.name === "Manhattan");
@@ -3784,24 +2622,8 @@ async function init() {
   state.originPoint = null;
 
   const sharedView = parseSharedView();
-  const hasSharedViewParams =
-    Boolean(sharedView.origin) ||
-    Boolean(sharedView.probe) ||
-    sharedView.warp !== null ||
-    sharedView.heatmap !== null ||
-    sharedView.outline !== null;
-  state.mobileHelpCollapsed = hasSharedViewParams;
   if (sharedView.zoom) {
     state.viewportScale = sharedView.zoom;
-  }
-  if (sharedView.warp !== null) {
-    state.showWarp = sharedView.warp;
-  }
-  if (sharedView.heatmap !== null) {
-    state.showHeatmap = sharedView.heatmap;
-  }
-  if (sharedView.outline !== null) {
-    state.showReachOutline = sharedView.outline;
   }
   if (sharedView.origin) {
     const restoredPoint = lonLatToWorld(sharedView.origin.lon, sharedView.origin.lat);
@@ -3820,22 +2642,13 @@ async function init() {
     }
   }
 
-  warpToggle.checked = state.showWarp;
-  heatmapToggle.checked = state.showHeatmap;
-  outlineToggle.checked = state.showReachOutline;
-  syncProbeRouteTable(state.probePoint);
   syncRouteBuilderPanel();
   syncPinSummary();
   syncTravelSettingsInputs();
-  syncHeatmapLegend();
   syncZoomControls();
 
   resize();
   window.addEventListener("resize", resize);
-
-  mobileWarpToggle.checked = state.showWarp;
-  mobileHeatmapToggle.checked = state.showHeatmap;
-  mobileOutlineToggle.checked = state.showReachOutline;
 
   for (const menu of settingsMenus) {
     menu.addEventListener("toggle", () => {
@@ -3919,59 +2732,6 @@ async function init() {
     if (state.isMobile || state.mobileDragTarget) return;
     state.cursorScreen = null;
     state.cursorPoint = null;
-    state.dirty = true;
-    requestDraw();
-  });
-
-  heatmapToggle.addEventListener("change", () => {
-    closeSharePanel();
-    state.showHeatmap = heatmapToggle.checked;
-    mobileHeatmapToggle.checked = state.showHeatmap;
-    syncHeatmapLegend();
-    syncBrowserUrl();
-    state.dirty = true;
-    requestDraw();
-  });
-
-  warpToggle.addEventListener("change", () => {
-    closeSharePanel();
-    state.showWarp = warpToggle.checked;
-    mobileWarpToggle.checked = state.showWarp;
-    syncBrowserUrl();
-    state.dirty = true;
-    requestDraw();
-  });
-
-  mobileHeatmapToggle.addEventListener("change", () => {
-    state.showHeatmap = mobileHeatmapToggle.checked;
-    heatmapToggle.checked = state.showHeatmap;
-    syncHeatmapLegend();
-    syncBrowserUrl();
-    state.dirty = true;
-    requestDraw();
-  });
-
-  mobileWarpToggle.addEventListener("change", () => {
-    state.showWarp = mobileWarpToggle.checked;
-    warpToggle.checked = state.showWarp;
-    syncBrowserUrl();
-    state.dirty = true;
-    requestDraw();
-  });
-
-  outlineToggle.addEventListener("change", () => {
-    closeSharePanel();
-    state.showReachOutline = outlineToggle.checked;
-    mobileOutlineToggle.checked = state.showReachOutline;
-    syncBrowserUrl();
-    state.dirty = true;
-    requestDraw();
-  });
-
-  mobileOutlineToggle.addEventListener("change", () => {
-    state.showReachOutline = mobileOutlineToggle.checked;
-    outlineToggle.checked = state.showReachOutline;
-    syncBrowserUrl();
     state.dirty = true;
     requestDraw();
   });
@@ -4267,7 +3027,7 @@ async function init() {
   });
 
   mobileLocateButton.addEventListener("click", () => {
-    collapseMobileHelp();
+  
     useCurrentLocation();
   });
 
@@ -4320,22 +3080,6 @@ async function init() {
     cancelMobileDrawerGesture(event);
   });
 
-  mobileInstructionsLocateButton.addEventListener("click", () => {
-    collapseMobileHelp();
-    useCurrentLocation();
-  });
-
-  mobileMapInstructions.addEventListener("click", (event) => {
-    if (event.target instanceof Element && event.target.closest("#mobileInstructionsLocateButton")) {
-      return;
-    }
-    collapseMobileHelp();
-  });
-
-  mobileHelpBubble.addEventListener("click", () => {
-    expandMobileHelp();
-  });
-
   for (const [addBtn, undoBtn, comparisonsEl] of [
     [addComparisonBtn, undoRouteBtn, routeComparisons],
     [mobileAddComparisonBtn, mobileUndoRouteBtn, mobileRouteComparisons],
@@ -4364,7 +3108,7 @@ async function init() {
   setupFooterEmojiBursts();
   syncFullscreenButton();
   syncMobileSheet();
-  syncMobileHelp();
+
   setDrawerCollapsed(true);
 }
 

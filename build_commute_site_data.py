@@ -399,10 +399,13 @@ def build_routes_and_shapes(lat0: float, bbox: Tuple[float, float, float, float]
     for row in read_csv_from_zip(GTFS_PATH, "routes.txt"):
         if row.get("route_type") != "1" and row.get("route_id") != "SI":
             continue
-        route_styles[row["route_id"]] = {
+        shuttle_labels = {"GS": "S(42)", "FS": "S(Fr)", "H": "S(Rk)"}
+        route_id = row["route_id"]
+        label = shuttle_labels.get(route_id) or row["route_short_name"] or route_id
+        route_styles[route_id] = {
             "color": f"#{row['route_color'] or '808183'}",
             "textColor": f"#{row['route_text_color'] or 'FFFFFF'}",
-            "label": row["route_short_name"] or row["route_id"],
+            "label": label,
         }
 
     trips_by_id = {}
@@ -713,47 +716,6 @@ def add_staten_island_ferry(
             upsert_edge(other_state, ferry_state, to_ferry)
 
 
-def build_grid_cells(polygons: MultiPolygon, stations: list, bbox: Tuple[float, float, float, float]) -> Tuple[list, list]:
-    min_x, min_y, max_x, max_y = bbox
-    cell_w = (max_x - min_x) / GRID_COLS
-    cell_h = (max_y - min_y) / GRID_ROWS
-    mask = []
-    cells = []
-    station_points = [station["point"] for station in stations]
-    for row in range(GRID_ROWS):
-        for col in range(GRID_COLS):
-            x = min_x + (col + 0.5) * cell_w
-            y = min_y + (row + 0.5) * cell_h
-            point = (x, y)
-            if not point_in_multipolygon(point, polygons):
-                mask.append(-1)
-                continue
-            ranked = sorted(
-                (
-                    (
-                        station_index,
-                        round(
-                            math.hypot(station_point[0] - x, station_point[1] - y) / ACCESS_WALK_METERS_PER_MINUTE
-                            + STATION_ACCESS_PENALTY,
-                            2,
-                        ),
-                    )
-                    for station_index, station_point in enumerate(station_points)
-                ),
-                key=lambda item: item[1],
-            )[:CELL_NEAREST_STATIONS]
-            cells.append(
-                {
-                    "col": col,
-                    "row": row,
-                    "point": round_point(point),
-                    "access": [[station_index, walk_minutes] for station_index, walk_minutes in ranked],
-                }
-            )
-            mask.append(len(cells) - 1)
-    return cells, mask
-
-
 def main() -> None:
     borough_payload = load_json(BOROUGHS_PATH)
     lat0 = average_borough_latitude(borough_payload)
@@ -782,14 +744,10 @@ def main() -> None:
     route_stop_schedules = build_route_stop_schedules(
         trips_by_id, stop_to_complex, station_index_by_id, state_index_by_key, len(route_states)
     )
-    cells, mask = build_grid_cells(all_polygons, stations, bbox)
-
     output = {
         "meta": {
             "lat0": round(lat0, 6),
             "bounds": [round(value, 1) for value in bbox],
-            "gridCols": GRID_COLS,
-            "gridRows": GRID_ROWS,
             "walkMetersPerMinute": WALK_METERS_PER_MINUTE,
             "accessWalkMetersPerMinute": ACCESS_WALK_METERS_PER_MINUTE,
             "stationAccessPenalty": STATION_ACCESS_PENALTY,
@@ -818,8 +776,6 @@ def main() -> None:
         "routeWaits": route_waits,
         "routeStopSchedules": route_stop_schedules,
         "adjacency": adjacency,
-        "cells": cells,
-        "mask": mask,
         "routeStyles": route_styles,
     }
 

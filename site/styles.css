@@ -1300,6 +1300,11 @@ canvas {
   color: var(--muted);
 }
 
+.route-comparison-step-wait {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .route-comparison-unviable {
   font-size: 0.82rem;
   color: var(--muted);
