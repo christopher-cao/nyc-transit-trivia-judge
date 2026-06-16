@@ -1291,7 +1291,7 @@ function traceOptimalPath(origin, dijkstraResult, destinationPoint) {
   }
 
   const exitStation = stations[bestExitSi];
-  const exitWalk = walkMinutesToStation(destinationPoint, bestExitSi) + destination.swimMinutes;
+  const exitWalk = walkMinutesToStation(destination.point, bestExitSi) + destination.swimMinutes;
   steps.push({ kind: "ride", routeId: routeStates[path[path.length - 1]].routeId, from: rideStartName, to: exitStation.name, minutes: rideDist });
   steps.push({ kind: "walk", stationName: exitStation.name, minutes: exitWalk });
 
@@ -1358,7 +1358,7 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
   const destNormalized = normalizeTravelPoint(destinationPoint);
   let bestExitWalk = Infinity;
   for (const si of state.routeStationIndex.get(routeIds[N - 1])) {
-    const w = walkMinutesToStation(destinationPoint, si) + destNormalized.swimMinutes;
+    const w = walkMinutesToStation(destNormalized.point, si) + destNormalized.swimMinutes;
     if (w < bestExitWalk) bestExitWalk = w;
   }
   if (bestExitWalk > MAX_WALK_TO_STATION_MINUTES) {
@@ -1455,7 +1455,7 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
   let bestTerminalNode = -1;
   let bestExitSi = -1;
   for (const si of state.routeStationIndex.get(routeIds[N - 1])) {
-    const w = walkMinutesToStation(destinationPoint, si) + destNormalized.swimMinutes;
+    const w = walkMinutesToStation(destNormalized.point, si) + destNormalized.swimMinutes;
     for (const rsi of state.data.stationStates[si] || []) {
       if (routeStates[rsi].routeId !== routeIds[N - 1]) continue;
       const node = rsi * N + (N - 1);
@@ -1533,7 +1533,7 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
 
   // Final ride segment
   const exitStation = stations[bestExitSi];
-  const actualExitWalk = walkMinutesToStation(destinationPoint, bestExitSi) + destNormalized.swimMinutes;
+  const actualExitWalk = walkMinutesToStation(destNormalized.point, bestExitSi) + destNormalized.swimMinutes;
   steps.push({ kind: "ride", routeId: routeIds[N - 1], from: rideStartName, to: exitStation.name, minutes: rideDist });
   steps.push({ kind: "walk", stationName: exitStation.name, minutes: actualExitWalk });
 
