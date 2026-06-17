@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NYC Transit Guessr</title>
+    <meta name="description" content="Guess the fastest subway route between two NYC landmarks." />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="quiz-header">
+        <p class="eyebrow">NYC Transit Guessr</p>
+        <h1 class="quiz-title">What's the fastest route?</h1>
+        <p class="quiz-subtitle">Build a subway route between the two landmarks, then check your answer against the optimal path.</p>
+      </header>
+
+      <div id="quizLoading" class="quiz-loading">Loading data…</div>
+
+      <div class="quiz-map-frame">
+        <canvas id="quizMapCanvas" class="quiz-map-canvas"></canvas>
+        <div class="quiz-map-controls">
+          <button class="map-control-btn" id="mapZoomIn" type="button" aria-label="Zoom in">+</button>
+          <button class="map-control-btn" id="mapZoomOut" type="button" aria-label="Zoom out">−</button>
+          <button class="map-control-btn map-control-reset" id="mapReset" type="button" aria-label="Reset view">⊙</button>
+        </div>
+      </div>
+
+      <div id="quizApp" hidden>
+        <!-- Question card -->
+        <div class="panel-card quiz-question-card">
+          <div class="quiz-od-row">
+            <div class="quiz-od-pin quiz-od-origin">
+              <span class="quiz-od-icon">📍</span>
+              <div>
+                <div class="quiz-od-label">From</div>
+                <div class="quiz-od-name" id="quizOrigin"></div>
+              </div>
+            </div>
+            <div class="quiz-od-arrow">↓</div>
+            <div class="quiz-od-pin quiz-od-dest">
+              <span class="quiz-od-icon">🎯</span>
+              <div>
+                <div class="quiz-od-label">To</div>
+                <div class="quiz-od-name" id="quizDestination"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Route builder -->
+        <div class="panel-card quiz-builder-card">
+          <div class="quiz-builder-header">
+            <div class="quiz-section-label">Your route</div>
+            <div class="guess-counter" id="guessCounter"></div>
+          </div>
+          <div class="quiz-route-sequence" id="quizRouteSequence"></div>
+
+          <div class="quiz-builder-actions">
+            <button class="quiz-btn quiz-btn-ghost" id="undoBtn" type="button" disabled>Undo</button>
+            <button class="quiz-btn quiz-btn-primary" id="submitBtn" type="button" disabled>Check</button>
+            <button class="quiz-btn quiz-btn-ghost quiz-btn-giveup" id="giveUpBtn" type="button">Give up</button>
+            <button class="quiz-btn quiz-btn-share" id="shareBtn" type="button" hidden>Share results</button>
+            <button class="quiz-btn quiz-btn-next" id="nextBtn" type="button" hidden>Next →</button>
+          </div>
+
+          <div class="route-palette quiz-palette" id="quizPalette"></div>
+        </div>
+
+        <!-- Results -->
+        <div id="quizResults" hidden></div>
+      </div>
+    </div>
+
+    <!-- Share modal -->
+    <dialog id="shareModal" class="share-modal">
+      <div class="share-modal-inner">
+        <div class="share-modal-header">
+          <h2 class="share-modal-title">Share your result</h2>
+          <button class="share-modal-close" id="shareModalClose" type="button" aria-label="Close" onclick="this.closest('dialog').close()">✕</button>
+        </div>
+        <pre id="shareModalText" class="share-modal-text"></pre>
+        <button class="quiz-btn quiz-btn-primary share-copy-btn" id="copyShareBtn" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy to clipboard
+        </button>
+      </div>
+    </dialog>
+
+    <script type="module" src="transit-guessr.js"></script>
+  </body>
+</html>
