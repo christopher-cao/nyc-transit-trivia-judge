@@ -2003,3 +2003,512 @@ details[open] .optimal-path-summary::before {
     touch-action: none;
   }
 }
+
+/* ── NYC Transit Guessr ── */
+
+.quiz-shell {
+  width: min(1360px, calc(100vw - 40px)) !important;
+  max-width: none !important;
+}
+
+.quiz-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 400px) 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.quiz-sidebar {
+  min-width: 0;
+}
+
+.quiz-map-frame {
+  position: sticky;
+  top: 24px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(40, 33, 23, 0.1);
+}
+
+.quiz-map-canvas {
+  display: block;
+  width: 100%;
+  height: calc(100dvh - 48px);
+  min-height: 400px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.quiz-map-canvas:active {
+  cursor: grabbing;
+}
+
+.quiz-map-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 1;
+}
+
+/* Mobile: stack map below sidebar */
+@media (max-width: 720px) {
+  .quiz-shell {
+    width: calc(100vw - 32px) !important;
+  }
+
+  .quiz-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .quiz-map-frame {
+    position: relative;
+    top: auto;
+    order: -1;
+    margin-bottom: 16px;
+  }
+
+  .quiz-map-canvas {
+    height: 300px;
+    min-height: unset;
+  }
+}
+
+.map-control-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1.5px solid var(--line);
+  background: rgba(255, 252, 247, 0.9);
+  backdrop-filter: blur(4px);
+  color: var(--ink);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+
+.map-control-btn:hover {
+  background: rgba(255, 252, 247, 1);
+}
+
+.map-control-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.map-control-reset {
+  font-size: 0.95rem;
+  margin-top: 2px;
+}
+
+.quiz-header {
+  margin-bottom: 20px;
+}
+
+.quiz-title {
+  margin: 0 0 8px;
+  font-size: clamp(1.6rem, 4vw, 2.8rem);
+  line-height: 1.1;
+}
+
+.quiz-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.quiz-loading {
+  padding: 24px 0;
+  color: var(--muted);
+}
+
+.quiz-question-card {
+  margin-bottom: 16px;
+  padding: 20px 24px;
+}
+
+.quiz-od-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quiz-od-pin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.quiz-od-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.quiz-od-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.quiz-od-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.quiz-od-arrow {
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 1.2rem;
+}
+
+.quiz-builder-card {
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+
+.quiz-section-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.quiz-route-sequence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  margin-bottom: 16px;
+}
+
+.route-sequence-placeholder {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.quiz-builder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.quiz-builder-header .quiz-section-label {
+  margin-bottom: 0;
+}
+
+.quiz-builder-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quiz-btn-undo {
+  height: 28px;
+  padding: 4px 12px;
+  font-size: 0.8rem;
+}
+
+.guess-counter {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.quiz-builder-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.quiz-builder-actions .quiz-btn-primary {
+  flex: 1;
+}
+
+.quiz-palette {
+  margin-top: 4px;
+}
+
+.palette-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.quiz-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  line-height: 1;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.quiz-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.quiz-btn-ghost {
+  background: transparent;
+  border: 1.5px solid var(--line);
+  color: var(--ink);
+  box-sizing: border-box;
+}
+
+.quiz-btn-ghost:not(:disabled):hover {
+  background: var(--paper-strong);
+}
+
+.quiz-btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.quiz-btn-primary:not(:disabled):hover {
+  background: #c04e24;
+}
+
+.quiz-btn-next {
+  background: var(--ink);
+  color: #fff;
+}
+
+.quiz-btn-next:hover {
+  background: #0f2338;
+}
+
+.quiz-btn-share {
+  background: #2e7d52;
+  color: #fff;
+}
+
+.quiz-btn-share:hover {
+  background: #235e3d;
+}
+
+.quiz-btn-giveup {
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.quiz-actions-card {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.quiz-actions-card[hidden] {
+  display: none;
+}
+
+.quiz-result-card {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+}
+
+.quiz-result-invalid {
+  border-color: #e0a090;
+}
+
+.quiz-result-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-weight: 700;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quiz-result-diff {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.quiz-result-diff-optimal {
+  color: #2e7d52;
+}
+
+.quiz-result-diff-invalid {
+  color: var(--muted);
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+.quiz-guess-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.quiz-guess-card {
+  padding: 14px 18px;
+}
+
+.quiz-answer-card {
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+
+.guess-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.guess-emoji {
+  font-size: 1.1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.guess-route {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.guess-time {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-left: auto;
+}
+
+.guess-steps {
+  margin: 8px 0 2px;
+}
+
+.guess-steps-details {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.guess-steps-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0;
+}
+
+.guess-steps-summary::-webkit-details-marker { display: none; }
+
+.guess-steps-summary::before {
+  content: "▶";
+  font-size: 0.6rem;
+  transition: transform 0.15s;
+}
+
+details[open] .guess-steps-summary::before {
+  transform: rotate(90deg);
+}
+
+/* Share modal */
+.share-modal {
+  border: none;
+  border-radius: 18px;
+  padding: 0;
+  width: min(480px, calc(100vw - 32px));
+  box-shadow: 0 24px 64px rgba(23, 48, 77, 0.22);
+  background: var(--paper);
+}
+
+.share-modal::backdrop {
+  background: rgba(23, 48, 77, 0.4);
+  backdrop-filter: blur(3px);
+}
+
+.share-modal-inner {
+  padding: 24px;
+}
+
+.share-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.share-modal-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.share-modal-close {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.share-modal-close:hover {
+  background: var(--paper-strong);
+}
+
+.share-modal-text {
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  background: var(--paper-strong);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 0 0 16px;
+  color: var(--ink);
+}
+
+.share-copy-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
