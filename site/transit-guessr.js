@@ -18,6 +18,8 @@ const MAP_ZOOM_STEP = 1.35;
 const MAP_ZOOM_MIN = 1;
 const MAP_ZOOM_MAX = 8;
 let panGesture = null;        // { pointerId, startScreen, startOffset }
+let activePointers = new Map(); // pointerId -> { x, y } in canvas coords
+let lastPinchDistance = null;
 
 const MAX_GUESSES = 5;
 
@@ -461,28 +463,54 @@ function initMapInteraction() {
     zoomMap(e.deltaY < 0 ? MAP_ZOOM_STEP : 1 / MAP_ZOOM_STEP, pivot);
   }, { passive: false });
 
-  // pointer-based pan
+  // pointer-based pan + pinch-to-zoom
   canvas.addEventListener("pointerdown", (e) => {
     canvas.setPointerCapture(e.pointerId);
     const rect = canvas.getBoundingClientRect();
-    panGesture = {
-      pointerId: e.pointerId,
-      startScreen: [e.clientX - rect.left, e.clientY - rect.top],
-      startOffset: [...mapPanOffset],
-    };
+    const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    activePointers.set(e.pointerId, pos);
+
+    if (activePointers.size === 1) {
+      panGesture = { pointerId: e.pointerId, startScreen: [pos.x, pos.y], startOffset: [...mapPanOffset] };
+      lastPinchDistance = null;
+    } else if (activePointers.size === 2) {
+      panGesture = null;
+      const pts = [...activePointers.values()];
+      lastPinchDistance = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+    }
   });
 
   canvas.addEventListener("pointermove", (e) => {
-    if (!panGesture || e.pointerId !== panGesture.pointerId) return;
+    if (!activePointers.has(e.pointerId)) return;
     const rect = canvas.getBoundingClientRect();
-    mapPanOffset = [
-      panGesture.startOffset[0] + e.clientX - rect.left - panGesture.startScreen[0],
-      panGesture.startOffset[1] + e.clientY - rect.top - panGesture.startScreen[1],
-    ];
-    drawQuizMap();
+    activePointers.set(e.pointerId, { x: e.clientX - rect.left, y: e.clientY - rect.top });
+
+    if (activePointers.size === 2) {
+      const pts = [...activePointers.values()];
+      const newDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      if (lastPinchDistance !== null && lastPinchDistance > 0) {
+        const pivot = [(pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2];
+        zoomMap(newDist / lastPinchDistance, pivot);
+      }
+      lastPinchDistance = newDist;
+    } else if (activePointers.size === 1 && panGesture && e.pointerId === panGesture.pointerId) {
+      mapPanOffset = [
+        panGesture.startOffset[0] + e.clientX - rect.left - panGesture.startScreen[0],
+        panGesture.startOffset[1] + e.clientY - rect.top - panGesture.startScreen[1],
+      ];
+      drawQuizMap();
+    }
   });
 
-  const endPointer = () => { panGesture = null; };
+  const endPointer = (e) => {
+    activePointers.delete(e.pointerId);
+    lastPinchDistance = null;
+    if (panGesture?.pointerId === e.pointerId) panGesture = null;
+    if (activePointers.size === 1) {
+      const [pid, pos] = [...activePointers.entries()][0];
+      panGesture = { pointerId: pid, startScreen: [pos.x, pos.y], startOffset: [...mapPanOffset] };
+    }
+  };
   canvas.addEventListener("pointerup", endPointer);
   canvas.addEventListener("pointercancel", endPointer);
 
@@ -1196,7 +1224,8 @@ function initPalette() {
 
 async function init() {
   const loadingEl = document.getElementById("quizLoading");
-  const appEl = document.getElementById("quizApp");
+  const appTopEl = document.getElementById("quizAppTop");
+  const appBottomEl = document.getElementById("quizAppBottom");
 
   try {
     const response = await fetch(DATA_URL);
@@ -1218,7 +1247,8 @@ async function init() {
   dynamicAdjacency = buildDynamicAdjacency();
 
   loadingEl.hidden = true;
-  appEl.hidden = false;
+  appTopEl.hidden = false;
+  appBottomEl.hidden = false;
 
   initPalette();
   pickNewQuestion(readPuzzleFromUrl());

@@ -8,12 +8,12 @@
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body class="quiz-body">
     <div class="page-shell quiz-shell">
       <div class="quiz-layout">
 
-        <!-- Left sidebar -->
-        <div class="quiz-sidebar">
+        <!-- Top sidebar: header + rules + question -->
+        <div class="quiz-sidebar-top">
           <header class="quiz-header">
             <p class="eyebrow">NYC Transit Guessr</p>
             <h1 class="quiz-title">What's the fastest route?</h1>
@@ -22,7 +22,7 @@
 
           <div id="quizLoading" class="quiz-loading">Loading data…</div>
 
-          <div id="quizApp" hidden>
+          <div id="quizAppTop" hidden>
             <!-- How to play -->
             <details class="quiz-rules">
               <summary class="quiz-rules-summary">How to play</summary>
@@ -56,7 +56,22 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
 
+        <!-- Map (right col on desktop; between top/bottom on mobile) -->
+        <div class="quiz-map-frame">
+          <canvas id="quizMapCanvas" class="quiz-map-canvas"></canvas>
+          <div class="quiz-map-controls">
+            <button class="map-control-btn" id="mapZoomIn" type="button" aria-label="Zoom in">+</button>
+            <button class="map-control-btn" id="mapZoomOut" type="button" aria-label="Zoom out">−</button>
+            <button class="map-control-btn map-control-reset" id="mapReset" type="button" aria-label="Reset view">⊙</button>
+          </div>
+        </div>
+
+        <!-- Bottom sidebar: builder + results + actions -->
+        <div class="quiz-sidebar-bottom">
+          <div id="quizAppBottom" hidden>
             <!-- Route builder -->
             <div class="panel-card quiz-builder-card">
               <div class="quiz-builder-header">
@@ -85,16 +100,6 @@
               <button class="quiz-btn quiz-btn-share" id="shareBtn" type="button">Share results</button>
               <button class="quiz-btn quiz-btn-next" id="nextBtn" type="button">Next →</button>
             </div>
-          </div>
-        </div>
-
-        <!-- Right: map (sticky on desktop) -->
-        <div class="quiz-map-frame">
-          <canvas id="quizMapCanvas" class="quiz-map-canvas"></canvas>
-          <div class="quiz-map-controls">
-            <button class="map-control-btn" id="mapZoomIn" type="button" aria-label="Zoom in">+</button>
-            <button class="map-control-btn" id="mapZoomOut" type="button" aria-label="Zoom out">−</button>
-            <button class="map-control-btn map-control-reset" id="mapReset" type="button" aria-label="Reset view">⊙</button>
           </div>
         </div>
 

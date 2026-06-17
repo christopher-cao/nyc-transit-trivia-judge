@@ -1628,7 +1628,7 @@ details[open] .optimal-path-summary::before {
 }
 
 @media (max-width: 480px) {
-  body {
+  body:not(.quiz-body) {
     overflow: hidden;
   }
 
@@ -2011,18 +2011,31 @@ details[open] .optimal-path-summary::before {
   max-width: none !important;
 }
 
+/* Desktop: left col = top + bottom sidebar stacked; right col = map spanning both */
 .quiz-layout {
   display: grid;
   grid-template-columns: minmax(300px, 400px) 1fr;
-  gap: 24px;
+  grid-template-rows: auto 1fr;
+  column-gap: 24px;
+  row-gap: 0;
   align-items: start;
 }
 
-.quiz-sidebar {
+.quiz-sidebar-top {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.quiz-sidebar-bottom {
+  grid-column: 1;
+  grid-row: 2;
   min-width: 0;
 }
 
 .quiz-map-frame {
+  grid-column: 2;
+  grid-row: 1 / span 2;
   position: sticky;
   top: 24px;
   border-radius: 16px;
@@ -2053,26 +2066,43 @@ details[open] .optimal-path-summary::before {
   z-index: 1;
 }
 
-/* Mobile: stack map below sidebar */
+/* Mobile: top → map → bottom, cards restored */
 @media (max-width: 720px) {
   .quiz-shell {
-    width: calc(100vw - 32px) !important;
+    width: calc(100vw - 24px) !important;
+    padding-top: 16px !important;
+    padding-bottom: 40px !important;
   }
 
   .quiz-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: unset;
+    row-gap: 12px;
   }
 
-  .quiz-map-frame {
-    position: relative;
-    top: auto;
-    order: -1;
-    margin-bottom: 16px;
-  }
+  .quiz-sidebar-top  { grid-column: 1; grid-row: 1; }
+  .quiz-map-frame    { grid-column: 1; grid-row: 2; position: relative; top: auto; }
+  .quiz-sidebar-bottom { grid-column: 1; grid-row: 3; }
 
   .quiz-map-canvas {
-    height: 300px;
+    height: 260px;
     min-height: unset;
+  }
+
+  /* Restore panel-card appearance that the main app's ≤480px rule destroys */
+  .quiz-body .panel-card {
+    min-height: unset;
+    border-radius: 18px;
+    padding: 14px 16px;
+    border: 1px solid rgba(23, 48, 77, 0.1);
+  }
+
+  .quiz-body .quiz-question-card {
+    padding: 16px;
+  }
+
+  .quiz-body .quiz-builder-card {
+    padding: 14px 16px;
   }
 }
 
