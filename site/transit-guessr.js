@@ -1262,6 +1262,7 @@ async function init() {
   pickNewQuestion(readPuzzleFromUrl());
   renderUI();
 
+  document.getElementById("shuffleBtn").addEventListener("click", nextQuestion);
   document.getElementById("undoBtn").addEventListener("click", undoRoute);
   document.getElementById("submitBtn").addEventListener("click", submitAnswer);
   document.getElementById("giveUpBtn").addEventListener("click", giveUp);
