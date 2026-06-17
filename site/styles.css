@@ -2353,6 +2353,8 @@ details[open] .optimal-path-summary::before {
 
 .quiz-actions-card {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
   padding: 16px 20px;
   margin-bottom: 16px;
@@ -2554,6 +2556,28 @@ details[open] .guess-steps-summary::before {
 
 .quiz-rules {
   margin-bottom: 16px;
+}
+
+.quiz-data-credit {
+  width: 100%;
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--muted);
+  opacity: 0.55;
+  margin: 6px 0 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+
+.quiz-data-credit a {
+  color: inherit;
+  text-underline-offset: 0.15em;
+  text-decoration-color: rgba(23, 48, 77, 0.3);
+}
+
+.quiz-data-credit a:hover {
+  text-decoration-color: currentColor;
 }
 
 .quiz-rules-summary {
