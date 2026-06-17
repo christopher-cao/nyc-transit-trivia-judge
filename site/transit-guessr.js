@@ -1228,9 +1228,14 @@ async function init() {
 
   try {
     const response = await fetch(DATA_URL);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     data = await response.json();
-  } catch {
-    loadingEl.textContent = "Failed to load data. Make sure the data file exists (run build_commute_site_data.py).";
+  } catch (err) {
+    loadingEl.innerHTML = `
+      <p>Couldn't load puzzle data. Check your connection and try again.</p>
+      <button class="quiz-btn quiz-btn-primary" style="margin-top:12px" onclick="location.reload()">Retry</button>
+    `;
+    console.error("Data load failed:", err);
     return;
   }
 
