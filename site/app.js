@@ -1136,21 +1136,22 @@ function sortRouteIds(routeIds) {
 function walkMinutesToStation(point, stationIndex) {
   const settings = currentTravelSettings();
   const station = state.data.stations[stationIndex];
-  return (
-    distance(point, station.point) / settings.walkingSpeed + state.data.meta.stationAccessPenalty
-  );
+  const mid = [(point[0] + station.point[0]) / 2, (point[1] + station.point[1]) / 2];
+  if (classifySurface(mid) === "water") return Infinity;
+  return distance(point, station.point) / settings.walkingSpeed + state.data.meta.stationAccessPenalty;
 }
 
 function nearestStations(point, count) {
   const settings = currentTravelSettings();
   return state.data.stations
-    .map((station, index) => ({
-      index,
-      name: station.name,
-      walkMinutes:
-        distance(point, station.point) / settings.walkingSpeed +
-        state.data.meta.stationAccessPenalty,
-    }))
+    .map((station, index) => {
+      const mid = [(point[0] + station.point[0]) / 2, (point[1] + station.point[1]) / 2];
+      const walkMinutes = classifySurface(mid) === "water"
+        ? Infinity
+        : distance(point, station.point) / settings.walkingSpeed + state.data.meta.stationAccessPenalty;
+      return { index, name: station.name, walkMinutes };
+    })
+    .filter(s => s.walkMinutes < Infinity)
     .sort((a, b) => a.walkMinutes - b.walkMinutes)
     .slice(0, count);
 }
@@ -1178,6 +1179,7 @@ function runDijkstra(origin) {
   const queryTime = state.selectedTimeMinutes ?? 0;
 
   for (const seed of seeds) {
+    if (seed.walkMinutes > MAX_WALK_TO_STATION_MINUTES) continue;
     for (const routeStateIndex of state.data.stationStates[seed.index] || []) {
       const arrivalAtStation = origin.swimMinutes + seed.walkMinutes;
       let waitMinutes;
@@ -1247,6 +1249,7 @@ function traceOptimalPath(origin, dijkstraResult, destinationPoint) {
   let bestExitSi = -1;
   const nearby = nearestStations(destination.point, state.data.meta.cellNearestStations);
   for (const station of nearby) {
+    if (station.walkMinutes > MAX_WALK_TO_STATION_MINUTES) continue;
     const walkOut = station.walkMinutes + destination.swimMinutes;
     for (const rsi of state.data.stationStates[station.index] || []) {
       const total = distances[rsi] + walkOut;

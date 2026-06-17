@@ -23,6 +23,18 @@
           <div id="quizLoading" class="quiz-loading">Loading data…</div>
 
           <div id="quizApp" hidden>
+            <!-- How to play -->
+            <details class="quiz-rules">
+              <summary class="quiz-rules-summary">How to play</summary>
+              <ul class="quiz-rules-list">
+                <li>Pick subway/train lines in order to build the fastest route between the two landmarks.</li>
+                <li>You have up to <strong>5 guesses</strong>. Each wrong guess reveals how close you were.</li>
+                <li>Walk time to/from stations is capped at <strong>30 minutes</strong> — no crossing water on foot.</li>
+                <li>Times are based on real NYC schedules for the puzzle's day and time.</li>
+                <li>Give up anytime to see the optimal route.</li>
+              </ul>
+            </details>
+
             <!-- Question card -->
             <div class="panel-card quiz-question-card">
               <div class="quiz-puzzle-time" id="quizPuzzleTime"></div>

@@ -51,7 +51,6 @@ const LANDMARKS = [
   { name: "Jackson Heights",         lat: 40.7557, lon: -73.8831 },
   { name: "Columbia University",     lat: 40.8075, lon: -73.9626 },
   { name: "Washington Square Park",  lat: 40.7308, lon: -73.9973 },
-  { name: "JFK Airport (AirTrain)",  lat: 40.6413, lon: -73.7781 },
   { name: "Staten Island Ferry",     lat: 40.6437, lon: -74.0736 },
   { name: "Astoria Park",            lat: 40.7753, lon: -73.9299 },
   { name: "Fort Greene Park",        lat: 40.6894, lon: -73.9742 },
@@ -158,16 +157,21 @@ function normalizeTravelPoint(point) {
 
 function walkMinutesToStation(point, stationIndex) {
   const station = data.stations[stationIndex];
+  const mid = [(point[0] + station.point[0]) / 2, (point[1] + station.point[1]) / 2];
+  if (classifySurface(mid) === "water") return Infinity;
   return distance(point, station.point) / settings.walkingSpeed + data.meta.stationAccessPenalty;
 }
 
 function nearestStations(point, count) {
   return data.stations
-    .map((station, index) => ({
-      index,
-      name: station.name,
-      walkMinutes: distance(point, station.point) / settings.walkingSpeed + data.meta.stationAccessPenalty,
-    }))
+    .map((station, index) => {
+      const mid = [(point[0] + station.point[0]) / 2, (point[1] + station.point[1]) / 2];
+      const walkMinutes = classifySurface(mid) === "water"
+        ? Infinity
+        : distance(point, station.point) / settings.walkingSpeed + data.meta.stationAccessPenalty;
+      return { index, name: station.name, walkMinutes };
+    })
+    .filter(s => s.walkMinutes < Infinity)
     .sort((a, b) => a.walkMinutes - b.walkMinutes)
     .slice(0, count);
 }
@@ -564,6 +568,7 @@ function runDijkstra(origin) {
   const queryTime = quizState.timeMinutes ?? 0;
 
   for (const seed of seeds) {
+    if (seed.walkMinutes > MAX_WALK_TO_STATION_MINUTES) continue;
     for (const rsi of data.stationStates[seed.index] || []) {
       const arrivalAtStation = origin.swimMinutes + seed.walkMinutes;
       let waitMinutes;
@@ -628,6 +633,7 @@ function traceOptimalPath(origin, dijkstraResult, destinationPoint) {
   let bestExitSi = -1;
   const nearby = nearestStations(destination.point, data.meta.cellNearestStations);
   for (const station of nearby) {
+    if (station.walkMinutes > MAX_WALK_TO_STATION_MINUTES) continue;
     const walkOut = station.walkMinutes + destination.swimMinutes;
     for (const rsi of data.stationStates[station.index] || []) {
       const total = distances[rsi] + walkOut;
@@ -908,7 +914,12 @@ function landmarkSlug(name) {
 }
 
 function setPuzzleUrl(originName, destName) {
-  const params = new URLSearchParams({ o: landmarkSlug(originName), d: landmarkSlug(destName) });
+  const params = new URLSearchParams({
+    o: landmarkSlug(originName),
+    d: landmarkSlug(destName),
+    t: quizState.timeMinutes,
+    dt: quizState.dayType,
+  });
   history.replaceState(null, '', `${window.location.pathname}?${params}`);
 }
 
@@ -919,7 +930,10 @@ function readPuzzleFromUrl() {
   const origin = LANDMARKS.find(l => landmarkSlug(l.name) === oSlug);
   const dest   = LANDMARKS.find(l => landmarkSlug(l.name) === dSlug);
   if (!origin || !dest || origin === dest) return null;
-  return { origin, dest };
+  const t = params.get('t'), dt = params.get('dt');
+  const timeMinutes = t !== null ? parseInt(t, 10) : null;
+  const dayType = DAY_TYPES.includes(dt) ? dt : null;
+  return { origin, dest, timeMinutes, dayType };
 }
 
 const DAY_TYPES = ["Weekday", "Saturday", "Sunday"];
@@ -941,9 +955,8 @@ function pickNewQuestion(overrides = null) {
   quizState.guesses = [];
   quizState.gameOver = false;
   quizState.optimalResult = null;
-  quizState.dayType = DAY_TYPES[Math.floor(Math.random() * DAY_TYPES.length)];
-  // Random time 6am–11pm, rounded to nearest 5 min
-  quizState.timeMinutes = Math.round((360 + Math.random() * 900) / 5) * 5;
+  quizState.dayType = overrides?.dayType ?? (Math.random() < 0.5 ? "Weekday" : Math.random() < 0.5 ? "Saturday" : "Sunday");
+  quizState.timeMinutes = overrides?.timeMinutes ?? Math.round((360 + Math.random() * 900) / 5) * 5;
   setPuzzleUrl(origin.name, dest.name);
 }
 
