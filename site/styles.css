@@ -2006,9 +2006,25 @@ details[open] .optimal-path-summary::before {
 
 /* ── NYC Transit Guessr ── */
 
+.quiz-shell {
+  width: min(1360px, calc(100vw - 40px)) !important;
+  max-width: none !important;
+}
+
+.quiz-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 400px) 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.quiz-sidebar {
+  min-width: 0;
+}
+
 .quiz-map-frame {
-  position: relative;
-  margin-bottom: 16px;
+  position: sticky;
+  top: 24px;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(40, 33, 23, 0.1);
@@ -2017,7 +2033,8 @@ details[open] .optimal-path-summary::before {
 .quiz-map-canvas {
   display: block;
   width: 100%;
-  height: 340px;
+  height: calc(100dvh - 48px);
+  min-height: 400px;
   cursor: grab;
   touch-action: none;
 }
@@ -2034,6 +2051,29 @@ details[open] .optimal-path-summary::before {
   flex-direction: column;
   gap: 4px;
   z-index: 1;
+}
+
+/* Mobile: stack map below sidebar */
+@media (max-width: 720px) {
+  .quiz-shell {
+    width: calc(100vw - 32px) !important;
+  }
+
+  .quiz-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .quiz-map-frame {
+    position: relative;
+    top: auto;
+    order: -1;
+    margin-bottom: 16px;
+  }
+
+  .quiz-map-canvas {
+    height: 300px;
+    min-height: unset;
+  }
 }
 
 .map-control-btn {
@@ -2069,7 +2109,7 @@ details[open] .optimal-path-summary::before {
 }
 
 .quiz-header {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .quiz-title {
@@ -2170,6 +2210,18 @@ details[open] .optimal-path-summary::before {
   margin-bottom: 0;
 }
 
+.quiz-builder-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quiz-btn-undo {
+  height: 28px;
+  padding: 4px 12px;
+  font-size: 0.8rem;
+}
+
 .guess-counter {
   font-size: 0.8rem;
   color: var(--muted);
@@ -2179,8 +2231,11 @@ details[open] .optimal-path-summary::before {
 .quiz-builder-actions {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
   margin-bottom: 16px;
+}
+
+.quiz-builder-actions .quiz-btn-primary {
+  flex: 1;
 }
 
 .quiz-palette {
@@ -2257,6 +2312,17 @@ details[open] .optimal-path-summary::before {
   margin-left: auto;
 }
 
+.quiz-actions-card {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.quiz-actions-card[hidden] {
+  display: none;
+}
+
 .quiz-result-card {
   background: var(--card);
   border: 1.5px solid var(--line);
@@ -2305,7 +2371,16 @@ details[open] .optimal-path-summary::before {
 .quiz-guess-history {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.quiz-guess-card {
+  padding: 14px 18px;
+}
+
+.quiz-answer-card {
+  padding: 16px 20px;
   margin-bottom: 12px;
 }
 
@@ -2314,10 +2389,6 @@ details[open] .optimal-path-summary::before {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 8px 12px;
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: 10px;
 }
 
 .guess-emoji {
@@ -2341,7 +2412,38 @@ details[open] .optimal-path-summary::before {
 }
 
 .guess-steps {
-  margin: 4px 0 4px 28px;
+  margin: 8px 0 2px;
+}
+
+.guess-steps-details {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.guess-steps-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0;
+}
+
+.guess-steps-summary::-webkit-details-marker { display: none; }
+
+.guess-steps-summary::before {
+  content: "▶";
+  font-size: 0.6rem;
+  transition: transform 0.15s;
+}
+
+details[open] .guess-steps-summary::before {
+  transform: rotate(90deg);
 }
 
 /* Share modal */

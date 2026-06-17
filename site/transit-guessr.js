@@ -995,8 +995,7 @@ function renderRouteBuilder() {
   document.getElementById("undoBtn").disabled = gameOver || current.length === 0;
   document.getElementById("submitBtn").disabled = gameOver || current.length === 0;
   document.getElementById("giveUpBtn").hidden = gameOver;
-  document.getElementById("nextBtn").hidden = !gameOver;
-  document.getElementById("shareBtn").hidden = !gameOver;
+  document.getElementById("quizActionsCard").hidden = !gameOver;
   document.getElementById("quizPalette").classList.toggle("palette-disabled", gameOver);
 }
 
@@ -1007,8 +1006,8 @@ function renderResults() {
   if (guesses.length === 0) { resultsEl.hidden = true; return; }
   resultsEl.hidden = false;
 
-  // Guess history rows
-  const guessRows = guesses.map((g, i) => {
+  // Guess history — each guess gets its own card
+  const guessCards = guesses.map((g, i) => {
     const isLast = i === guesses.length - 1;
     const emoji = guessEmoji(g.minutesOff);
     const routeSeq = seqBadges(g.routeIds);
@@ -1018,27 +1017,31 @@ function renderResults() {
         ? `<span class="quiz-result-diff quiz-result-diff-optimal">Optimal! 🎉</span>`
         : `<span class="quiz-result-diff">+${formatMinutes(g.minutesOff)} vs optimal</span>`;
 
-    const summary = `<div class="guess-row">
-      <span class="guess-emoji">${emoji}</span>
-      <span class="guess-route">${routeSeq}</span>
-      ${g.evalResult.viable ? `<span class="guess-time">${formatMinutes(g.evalResult.totalMinutes)}</span>` : ""}
-      ${diffLabel}
-    </div>`;
+    const steps = g.evalResult.viable
+      ? `<details class="guess-steps-details"${isLast ? " open" : ""}>
+          <summary class="guess-steps-summary">Route details</summary>
+          <ol class="route-comparison-steps guess-steps">${renderStepsList(g.evalResult.steps)}</ol>
+        </details>`
+      : "";
 
-    // Expand the last guess's steps if viable
-    if (isLast && g.evalResult.viable) {
-      return summary + `<ol class="route-comparison-steps guess-steps">${renderStepsList(g.evalResult.steps)}</ol>`;
-    }
-    return summary;
+    return `<div class="panel-card quiz-guess-card">
+      <div class="guess-row">
+        <span class="guess-emoji">${emoji}</span>
+        <span class="guess-route">${routeSeq}</span>
+        ${g.evalResult.viable ? `<span class="guess-time">${formatMinutes(g.evalResult.totalMinutes)}</span>` : ""}
+        ${diffLabel}
+      </div>
+      ${steps}
+    </div>`;
   }).join("");
 
-  let html = `<div class="quiz-guess-history">${guessRows}</div>`;
+  let html = `<div class="quiz-guess-history">${guessCards}</div>`;
 
   if (gameOver && optimalResult) {
-    html += `<details class="optimal-path-accordion">
-      <summary class="optimal-path-summary">✨ Answer key <span class="optimal-path-total">${formatMinutes(optimalResult.totalMinutes)}</span></summary>
+    html += `<div class="panel-card quiz-answer-card">
+      <div class="quiz-result-label">✨ Answer key <span class="quiz-result-diff quiz-result-diff-optimal">${formatMinutes(optimalResult.totalMinutes)}</span></div>
       <ol class="route-comparison-steps">${renderStepsList(optimalResult.steps)}</ol>
-    </details>`;
+    </div>`;
   }
 
   resultsEl.innerHTML = html;
