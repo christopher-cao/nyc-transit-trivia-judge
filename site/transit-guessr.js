@@ -1196,13 +1196,17 @@ function seqBadges(routeIds) {
 
 // --- palette ---
 
+const PALETTE_ORDER = ["1","2","3","A","C","E","B","D","F","M","N","Q","R","W","4","5","6","L","J","Z","7","G"];
+
 function initPalette() {
   const paletteEl = document.getElementById("quizPalette");
-  const sortedRouteIds = [...routeStationIndex.keys()].sort((a, b) => {
-    const aNum = /^\d/.test(a), bNum = /^\d/.test(b);
-    if (aNum && bNum) return parseInt(a, 10) - parseInt(b, 10) || a.localeCompare(b);
-    if (aNum) return -1;
-    if (bNum) return 1;
+  const allIds = [...routeStationIndex.keys()];
+  const priority = new Map(PALETTE_ORDER.map((id, i) => [id, i]));
+  const sortedRouteIds = allIds.sort((a, b) => {
+    const ai = priority.get(a), bi = priority.get(b);
+    if (ai !== undefined && bi !== undefined) return ai - bi;
+    if (ai !== undefined) return -1;
+    if (bi !== undefined) return 1;
     return a.localeCompare(b);
   });
 
@@ -1233,6 +1237,15 @@ async function init() {
   } catch {
     loadingEl.textContent = "Failed to load data. Make sure the data file exists (run build_commute_site_data.py).";
     return;
+  }
+
+  // Collapse express variants into their base lines
+  const ROUTE_COLLAPSED = { "6X": "6", "7X": "7", "FX": "F" };
+  for (const rs of data.routeStates) {
+    if (ROUTE_COLLAPSED[rs.routeId]) rs.routeId = ROUTE_COLLAPSED[rs.routeId];
+  }
+  for (const station of data.stations) {
+    station.routes = [...new Set(station.routes.map(r => ROUTE_COLLAPSED[r] ?? r))];
   }
 
   settingsDefaults = {
