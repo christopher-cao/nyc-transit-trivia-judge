@@ -2134,6 +2134,15 @@ details[open] .optimal-path-summary::before {
   padding: 20px 24px;
 }
 
+.quiz-puzzle-time {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
 .quiz-od-row {
   display: flex;
   flex-direction: column;

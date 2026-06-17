@@ -28,6 +28,8 @@ const quizState = {
   guesses: [],          // [{ routeIds, evalResult, minutesOff }]
   gameOver: false,
   optimalResult: null,
+  dayType: null,        // "Weekday" | "Saturday" | "Sunday"
+  timeMinutes: null,    // minutes from midnight (e.g. 540 = 9:00am)
 };
 
 // --- landmark list ---
@@ -531,6 +533,26 @@ function buildDynamicAdjacency() {
 
 // --- Dijkstra (unconstrained, average waits — no schedule) ---
 
+function formatClock(absoluteMinutes) {
+  const total = Math.round(absoluteMinutes) % 1440;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  const ampm = h < 12 ? "am" : "pm";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
+}
+
+function nextDeparture(rsi, absoluteTimeMinutes) {
+  const deps = data.routeStopSchedules?.[quizState.dayType]?.[rsi];
+  if (!deps || !deps.length) return Infinity;
+  let lo = 0, hi = deps.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (deps[mid] < absoluteTimeMinutes) lo = mid + 1; else hi = mid;
+  }
+  return lo < deps.length ? deps[lo] : deps[0] + 1440;
+}
+
 function runDijkstra(origin) {
   const stateCount = data.routeStates.length;
   const distances = new Array(stateCount).fill(Infinity);
@@ -538,13 +560,22 @@ function runDijkstra(origin) {
   const visited = new Array(stateCount).fill(false);
   const seeds = nearestStations(origin.point, data.meta.originStationCount);
 
+  const useSchedule = quizState.timeMinutes !== null && quizState.dayType !== null;
+  const queryTime = quizState.timeMinutes ?? 0;
+
   for (const seed of seeds) {
     for (const rsi of data.stationStates[seed.index] || []) {
       const arrivalAtStation = origin.swimMinutes + seed.walkMinutes;
-      const routeId = data.routeStates[rsi].routeId;
-      const boardingDelta =
-        (data.routeWaits?.[routeId] ?? settingsDefaults.transitTime) - settingsDefaults.transitTime;
-      const waitMinutes = settings.transitTime + boardingDelta;
+      let waitMinutes;
+      if (useSchedule) {
+        const dep = nextDeparture(rsi, queryTime + arrivalAtStation);
+        waitMinutes = dep === Infinity ? Infinity : dep - (queryTime + arrivalAtStation);
+      } else {
+        const routeId = data.routeStates[rsi].routeId;
+        const boardingDelta =
+          (data.routeWaits?.[routeId] ?? settingsDefaults.transitTime) - settingsDefaults.transitTime;
+        waitMinutes = settings.transitTime + boardingDelta;
+      }
       distances[rsi] = Math.min(distances[rsi], arrivalAtStation + waitMinutes);
     }
   }
@@ -559,13 +590,21 @@ function runDijkstra(origin) {
     visited[current] = true;
     for (const edge of dynamicAdjacency[current]) {
       let weight;
-      if (edge.kind === "ride") {
-        weight = edge.rideMinutes;
-      } else if (edge.kind === "transfer") {
-        weight = settings.transferTime + settings.transitTime + edge.boardingDelta;
+      if (useSchedule && edge.kind !== "ride") {
+        const walkTime = edge.kind === "interchange"
+          ? edge.walkDistance / settings.walkingSpeed + edge.walkPenalty
+          : 0;
+        const absoluteArrival = queryTime + distances[current] + walkTime;
+        const dep = nextDeparture(edge.toIndex, absoluteArrival);
+        const boardingWait = dep === Infinity ? Infinity : dep - absoluteArrival;
+        weight = walkTime + settings.transferTime + boardingWait;
       } else {
-        weight = edge.walkDistance / settings.walkingSpeed + edge.walkPenalty +
-          settings.transferTime + settings.transitTime + edge.boardingDelta;
+        weight = edge.kind === "ride"
+          ? edge.rideMinutes
+          : edge.kind === "transfer"
+            ? settings.transferTime + settings.transitTime + edge.boardingDelta
+            : edge.walkDistance / settings.walkingSpeed + edge.walkPenalty +
+              settings.transferTime + settings.transitTime + edge.boardingDelta;
       }
       const candidate = distances[current] + weight;
       if (candidate < distances[edge.toIndex]) {
@@ -682,14 +721,23 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
   const prev = new Int32Array(totalNodes).fill(-1);
   const visited = new Uint8Array(totalNodes);
 
+  const useSchedule = quizState.timeMinutes !== null && quizState.dayType !== null;
+  const queryTime = quizState.timeMinutes ?? 0;
+
   for (const si of routeStationIndex.get(routeIds[0])) {
     const w = walkMinutesToStation(originPoint, si);
     if (w > MAX_WALK_TO_STATION_MINUTES) continue;
     for (const rsi of data.stationStates[si] || []) {
       if (routeStates[rsi].routeId !== routeIds[0]) continue;
-      const boardingDelta =
-        (data.routeWaits?.[routeIds[0]] ?? settingsDefaults.transitTime) - settingsDefaults.transitTime;
-      const waitMinutes = settings.transitTime + boardingDelta;
+      let waitMinutes;
+      if (useSchedule) {
+        const dep = nextDeparture(rsi, queryTime + w);
+        waitMinutes = dep === Infinity ? Infinity : dep - (queryTime + w);
+      } else {
+        const boardingDelta =
+          (data.routeWaits?.[routeIds[0]] ?? settingsDefaults.transitTime) - settingsDefaults.transitTime;
+        waitMinutes = settings.transitTime + boardingDelta;
+      }
       const d = w + waitMinutes;
       const node = rsi * N + 0;
       if (d < dist[node]) dist[node] = d;
@@ -724,7 +772,14 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
         const walkTime = edge.kind === "interchange"
           ? edge.walkDistance / settings.walkingSpeed + edge.walkPenalty
           : 0;
-        const boardingWait = settings.transitTime + edge.boardingDelta;
+        let boardingWait;
+        if (useSchedule) {
+          const absoluteArrival = queryTime + dist[current] + walkTime;
+          const dep = nextDeparture(toRsi, absoluteArrival);
+          boardingWait = dep === Infinity ? Infinity : dep - absoluteArrival;
+        } else {
+          boardingWait = settings.transitTime + edge.boardingDelta;
+        }
         weight = walkTime + settings.transferTime + boardingWait;
         toPhase = phase + 1;
       } else {
@@ -822,19 +877,25 @@ function renderRouteBadge(routeId) {
   return `<span class="route-badge" style="background-color:${background};color:${color}">${escapeHtml(label)}</span>`;
 }
 
-function renderStepsList(steps) {
+function renderStepsList(steps, startTimeMinutes = null) {
+  let clock = startTimeMinutes;
   return steps.map((step) => {
+    const stepStart = clock;
+    if (clock !== null) clock += step.minutes;
+    const timeTag = stepStart !== null && step.kind !== "walk"
+      ? `<span class="route-step-clock">${formatClock(stepStart)}–${formatClock(clock)}</span> `
+      : "";
     if (step.kind === "walk") {
       return `<li class="route-comparison-step route-comparison-step-walk">Walk ${formatMinutes(step.minutes)}${step.stationName ? ` · <strong>${escapeHtml(step.stationName)}</strong>` : ""}</li>`;
     }
     if (step.kind === "wait") {
-      return `<li class="route-comparison-step route-comparison-step-wait">Wait ${formatMinutes(step.minutes)} for ${renderRouteBadge(step.routeId)}</li>`;
+      return `<li class="route-comparison-step route-comparison-step-wait">${timeTag}Wait ${formatMinutes(step.minutes)} for ${renderRouteBadge(step.routeId)}</li>`;
     }
     if (step.kind === "ride") {
-      return `<li class="route-comparison-step route-comparison-step-ride">${renderRouteBadge(step.routeId)} ${escapeHtml(step.from)} → <strong>${escapeHtml(step.to)}</strong> <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
+      return `<li class="route-comparison-step route-comparison-step-ride">${timeTag}${renderRouteBadge(step.routeId)} ${escapeHtml(step.from)} → <strong>${escapeHtml(step.to)}</strong> <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
     }
     if (step.kind === "transfer") {
-      return `<li class="route-comparison-step route-comparison-step-transfer">Transfer ${renderRouteBadge(step.from)} → ${renderRouteBadge(step.to)} at ${escapeHtml(step.at)} <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
+      return `<li class="route-comparison-step route-comparison-step-transfer">${timeTag}Transfer ${renderRouteBadge(step.from)} → ${renderRouteBadge(step.to)} at ${escapeHtml(step.at)} <span class="route-comparison-step-time">${formatMinutes(step.minutes)}</span></li>`;
     }
     return "";
   }).join("");
@@ -842,18 +903,48 @@ function renderStepsList(steps) {
 
 // --- quiz logic ---
 
-function pickNewQuestion() {
-  const a = Math.floor(Math.random() * LANDMARKS.length);
-  let b = Math.floor(Math.random() * (LANDMARKS.length - 1));
-  if (b >= a) b += 1;
-  const origin = LANDMARKS[a];
-  const dest = LANDMARKS[b];
+function landmarkSlug(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function setPuzzleUrl(originName, destName) {
+  const params = new URLSearchParams({ o: landmarkSlug(originName), d: landmarkSlug(destName) });
+  history.replaceState(null, '', `${window.location.pathname}?${params}`);
+}
+
+function readPuzzleFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const oSlug = params.get('o'), dSlug = params.get('d');
+  if (!oSlug || !dSlug) return null;
+  const origin = LANDMARKS.find(l => landmarkSlug(l.name) === oSlug);
+  const dest   = LANDMARKS.find(l => landmarkSlug(l.name) === dSlug);
+  if (!origin || !dest || origin === dest) return null;
+  return { origin, dest };
+}
+
+const DAY_TYPES = ["Weekday", "Saturday", "Sunday"];
+
+function pickNewQuestion(overrides = null) {
+  let origin, dest;
+  if (overrides) {
+    ({ origin, dest } = overrides);
+  } else {
+    const a = Math.floor(Math.random() * LANDMARKS.length);
+    let b = Math.floor(Math.random() * (LANDMARKS.length - 1));
+    if (b >= a) b += 1;
+    origin = LANDMARKS[a];
+    dest = LANDMARKS[b];
+  }
   quizState.origin = { name: origin.name, point: lonLatToWorld(origin.lon, origin.lat) };
   quizState.destination = { name: dest.name, point: lonLatToWorld(dest.lon, dest.lat) };
   quizState.routeSequence = [];
   quizState.guesses = [];
   quizState.gameOver = false;
   quizState.optimalResult = null;
+  quizState.dayType = DAY_TYPES[Math.floor(Math.random() * DAY_TYPES.length)];
+  // Random time 6am–11pm, rounded to nearest 5 min
+  quizState.timeMinutes = Math.round((360 + Math.random() * 900) / 5) * 5;
+  setPuzzleUrl(origin.name, dest.name);
 }
 
 function addRoute(routeId) {
@@ -934,7 +1025,7 @@ function buildShareText() {
         ? `I found the optimal route (${optTime} min)!`
         : `I was ${formatMinutes(bestGuess.minutesOff)} off the best route (optimal: ${optTime} min)`)
     : `Couldn't find a viable route (optimal: ${optTime} min)`;
-  const url = `${window.location.origin}${window.location.pathname}`;
+  const url = `${window.location.origin}${window.location.pathname}${window.location.search}`;
   return [
     "NYC Transit Guessr 🚇",
     `${quizState.origin.name} → ${quizState.destination.name}`,
@@ -976,6 +1067,12 @@ function renderUI() {
 function renderQuestion() {
   document.getElementById("quizOrigin").textContent = quizState.origin?.name ?? "";
   document.getElementById("quizDestination").textContent = quizState.destination?.name ?? "";
+  const timeEl = document.getElementById("quizPuzzleTime");
+  if (timeEl) {
+    timeEl.textContent = quizState.timeMinutes !== null
+      ? `${quizState.dayType} · ${formatClock(quizState.timeMinutes)}`
+      : "";
+  }
 }
 
 function renderRouteBuilder() {
@@ -1023,7 +1120,7 @@ function renderResults() {
     const steps = g.evalResult.viable
       ? `<details class="guess-steps-details"${isLast ? " open" : ""}>
           <summary class="guess-steps-summary">Route details</summary>
-          <ol class="route-comparison-steps guess-steps">${renderStepsList(g.evalResult.steps)}</ol>
+          <ol class="route-comparison-steps guess-steps">${renderStepsList(g.evalResult.steps, quizState.timeMinutes)}</ol>
         </details>`
       : "";
 
@@ -1043,7 +1140,7 @@ function renderResults() {
   if (gameOver && optimalResult) {
     html += `<div class="panel-card quiz-answer-card">
       <div class="quiz-result-label">✨ Answer key <span class="quiz-result-diff quiz-result-diff-optimal">${formatMinutes(optimalResult.totalMinutes)}</span></div>
-      <ol class="route-comparison-steps">${renderStepsList(optimalResult.steps)}</ol>
+      <ol class="route-comparison-steps">${renderStepsList(optimalResult.steps, quizState.timeMinutes)}</ol>
     </div>`;
   }
 
@@ -1111,7 +1208,7 @@ async function init() {
   appEl.hidden = false;
 
   initPalette();
-  pickNewQuestion();
+  pickNewQuestion(readPuzzleFromUrl());
   renderUI();
 
   document.getElementById("undoBtn").addEventListener("click", undoRoute);
