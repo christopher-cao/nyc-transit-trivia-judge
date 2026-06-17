@@ -934,6 +934,7 @@ function buildShareText() {
         ? `I found the optimal route (${optTime} min)!`
         : `I was ${formatMinutes(bestGuess.minutesOff)} off the best route (optimal: ${optTime} min)`)
     : `Couldn't find a viable route (optimal: ${optTime} min)`;
+  const url = `${window.location.origin}${window.location.pathname}`;
   return [
     "NYC Transit Guessr 🚇",
     `${quizState.origin.name} → ${quizState.destination.name}`,
@@ -941,6 +942,8 @@ function buildShareText() {
     `${emojiRow} (${quizState.guesses.length}/${MAX_GUESSES})`,
     "",
     bestLine,
+    "",
+    url,
   ].join("\n");
 }
 
