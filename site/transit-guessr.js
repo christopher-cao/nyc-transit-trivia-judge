@@ -669,11 +669,6 @@ function traceOptimalPath(origin, dijkstraResult, destinationPoint) {
     }
   }
 
-  const pureWalk = distance(origin.point, destination.point) / settings.walkingSpeed +
-    origin.swimMinutes + destination.swimMinutes;
-  if (pureWalk < bestTotal) {
-    return { steps: [{ kind: "walk", stationName: null, minutes: pureWalk }], totalMinutes: pureWalk };
-  }
   if (bestExitRsi === -1) return null;
 
   const path = [];
