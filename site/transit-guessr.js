@@ -989,7 +989,7 @@ function setPuzzleUrl(originName, destName) {
 
 function readPuzzleFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  if (params.has('daily')) return { daily: true };
+  if (params.has('daily') || document.body.hasAttribute('data-default-daily')) return { daily: true };
   const oSlug = params.get('o'), dSlug = params.get('d');
   if (!oSlug || !dSlug) return null;
   const origin = LANDMARKS.find(l => landmarkSlug(l.name) === oSlug);
@@ -1363,11 +1363,11 @@ async function init() {
   pickNewQuestion(readPuzzleFromUrl());
   renderUI();
 
-  document.getElementById("shuffleBtn").addEventListener("click", nextQuestion);
+  document.getElementById("shuffleBtn")?.addEventListener("click", nextQuestion);
   document.getElementById("undoBtn").addEventListener("click", undoRoute);
   document.getElementById("submitBtn").addEventListener("click", submitAnswer);
   document.getElementById("giveUpBtn").addEventListener("click", giveUp);
-  document.getElementById("nextBtn").addEventListener("click", nextQuestion);
+  document.getElementById("nextBtn")?.addEventListener("click", nextQuestion);
   document.getElementById("shareBtn").addEventListener("click", shareResults);
   document.getElementById("copyShareBtn").addEventListener("click", copyShareText);
   document.getElementById("shareModal").addEventListener("click", (e) => {

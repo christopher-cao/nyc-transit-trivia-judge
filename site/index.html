@@ -3,263 +3,129 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Transit Trivia Judge</title>
-    <meta
-      name="description"
-      content="A tool to judge transit trivia."
-    />
-    <meta property="og:site_name" content="Transit Trivia Judge" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="Transit Trivia Judge" />
-    <meta
-      property="og:description"
-      content="Dynamically compare routes and determine the quickest one."
-    />
-    <meta property="og:image" content="/social.png" />
-    <meta property="og:image:width" content="1638" />
-    <meta property="og:image:height" content="1492" />
-    <meta property="og:image:alt" content="Preview of the NYC Commute POV subway commute-time cartogram." />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Transit Trivia Judge" />
-    <meta
-      name="twitter:description"
-      content="Dynamically compare routes and determine the quickest one."
-    />
-    <meta name="twitter:image" content="/social.png" />
-    <meta name="twitter:image:alt" content="Preview of the Transit Trivia Judge." />
-    <script>
-      (function () {
-        const path = window.location.pathname;
-        const isSubpathDeploy = path === "/nyc" || path.startsWith("/nyc/");
-        const assetBase = isSubpathDeploy
-          ? "/nyc/"
-          : path.endsWith("/")
-            ? path
-            : path.slice(0, path.lastIndexOf("/") + 1);
-        window.__ASSET_BASE__ = assetBase;
-
-        const favicon = document.createElement("link");
-        favicon.rel = "icon";
-        favicon.type = "image/svg+xml";
-        favicon.href = `${assetBase}favicon.svg`;
-        document.head.appendChild(favicon);
-
-        const stylesheet = document.createElement("link");
-        stylesheet.rel = "stylesheet";
-        stylesheet.href = `${assetBase}styles.css`;
-        document.head.appendChild(stylesheet);
-      })();
-    </script>
+    <title>NYC Transit Daily</title>
+    <meta name="description" content="A new NYC subway puzzle every day. Guess the fastest route between two landmarks." />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
-    <div class="page-shell">
-      <header class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Transit Trivia Judge</p>
-          <h1>Dynamically compare routes and determine the quickest one.</h1>
-        </div>
-      </header>
+  <body class="quiz-body" data-default-daily>
+    <div class="page-shell quiz-shell">
+      <div class="quiz-layout">
 
-      <main class="workspace">
-        <section class="panel-card accent">
-          <div class="panel-layout">
-          <div class="panel-sidebar">
-          <div class="panel-header">
-            <div>
-              <h2>Route comparison</h2>
-              <p id="statusText">Loading transit network…</p>
-            </div>
-          </div>
+        <!-- Top sidebar: header + rules + question -->
+        <div class="quiz-sidebar-top">
+          <header class="quiz-header">
+            <p class="eyebrow">NYC Transit Daily</p>
+            <h1 class="quiz-title">What's the fastest route?</h1>
+            <p class="quiz-subtitle">Build a subway route between the two landmarks, then check your answer against the optimal path.</p>
+          </header>
 
-          <div class="od-card">
-            <form id="originSearchForm" class="od-row" autocomplete="off">
-              <span class="od-dot od-dot--origin">📍</span>
-              <input id="originAddressInput" name="originAddress" class="od-input" type="text" placeholder="Set origin…" autocomplete="off" />
-              <button id="setOriginBtn" class="od-action-btn od-map-btn" type="button" title="Place on map">Map</button>
-              <button id="originSearchButton" class="od-action-btn od-go-btn" type="submit">Go</button>
-              <button id="clearOriginBtn" class="od-action-btn od-clear-btn" type="button" title="Clear origin" hidden>✕</button>
-            </form>
-            <div id="originSearchMeta" class="od-meta" hidden></div>
-            <div id="originSearchResults" class="search-results" aria-live="polite"></div>
+          <div id="quizLoading" class="quiz-loading">Loading data…</div>
 
-            <div class="od-divider"><span class="od-divider-line"></span></div>
+          <div id="quizAppTop" hidden>
+            <!-- How to play -->
+            <details class="quiz-rules">
+              <summary class="quiz-rules-summary">How to play</summary>
+              <ul class="quiz-rules-list">
+                <li>Pick subway/train lines in order to build the fastest route between the two landmarks.</li>
+                <li>You have up to <strong>5 guesses</strong>. Each wrong guess reveals how close you were.</li>
+                <li>Walk time to/from stations is capped at <strong>30 minutes</strong> — no crossing water on foot.</li>
+                <li>Times are based on real NYC schedules for the puzzle's day and time.</li>
+                <li>Give up anytime to see the optimal route.</li>
+              </ul>
+            </details>
 
-            <form id="destSearchForm" class="od-row" autocomplete="off">
-              <span class="od-dot od-dot--dest">🎯</span>
-              <input id="destAddressInput" name="destAddress" class="od-input" type="text" placeholder="Set destination…" autocomplete="off" />
-              <button id="setDestinationBtn" class="od-action-btn od-map-btn" type="button" title="Place on map">Map</button>
-              <button id="destSearchButton" class="od-action-btn od-go-btn" type="submit">Go</button>
-              <button id="clearDestBtn" class="od-action-btn od-clear-btn" type="button" title="Clear destination" hidden>✕</button>
-            </form>
-            <div id="destSearchMeta" class="od-meta" hidden></div>
-            <div id="destSearchResults" class="search-results" aria-live="polite"></div>
-          </div>
-          <section class="sidebar-time-panel">
-            <div class="sidebar-search-label">Departure time</div>
-            <div class="sidebar-time-row">
-              <div class="sidebar-day-pills">
-                <button class="day-pill" data-day="Weekday" type="button">Weekday</button>
-                <button class="day-pill" data-day="Saturday" type="button">Sat</button>
-                <button class="day-pill" data-day="Sunday" type="button">Sun</button>
+            <!-- Question card -->
+            <div class="panel-card quiz-question-card">
+              <div class="quiz-question-header">
+                <div class="quiz-puzzle-time" id="quizPuzzleTime"></div>
+                <a class="quiz-btn quiz-btn-ghost quiz-btn-shuffle" href="/quiz" title="Play a random puzzle">⇄ Practice</a>
               </div>
-              <input id="timePickerInput" class="sidebar-time-input" type="time" value="08:00" disabled>
-              <button id="clearTimeBtn" class="sidebar-time-clear" type="button" hidden>✕ Any time</button>
-            </div>
-          </section>
-          <div id="optimalAccordionContainer"></div>
-          <section id="routeBuilderPanel" class="route-builder-panel" aria-live="polite">
-            <div class="route-builder-head">
-              <h3 class="route-builder-title">Route options</h3>
-              <div class="route-builder-actions">
-                <button id="undoRouteBtn" class="route-builder-undo-btn" type="button" hidden>← Undo</button>
-                <button id="addComparisonBtn" class="route-builder-add-btn" type="button" hidden>+ Compare</button>
-              </div>
-            </div>
-            <div id="routeComparisons" class="route-comparisons"></div>
-            <div id="routePalette" class="route-palette" aria-label="Route sticker palette"></div>
-          </section>
-          </div><!-- /.panel-sidebar -->
-          <div class="map-frame">
-            <canvas id="mapCanvas" aria-label="Warped map of New York City by transit time"></canvas>
-            <div class="map-zoom-controls" aria-label="Map zoom controls">
-              <button
-                id="zoomInButton"
-                class="pin-button share-button icon-button map-zoom-button"
-                type="button"
-                aria-label="Zoom in"
-                title="Zoom in"
-              >
-                <svg class="button-icon zoom-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m12.002 2c5.518 0 9.998 4.48 9.998 9.998 0 5.517-4.48 9.997-9.998 9.997-5.517 0-9.997-4.48-9.997-9.997 0-5.518 4.48-9.998 9.997-9.998zm0 1.5c-4.69 0-8.497 3.808-8.497 8.498s3.807 8.497 8.497 8.497 8.498-3.807 8.498-8.497-3.808-8.498-8.498-8.498zm-.747 7.75h-3.5c-.414 0-.75.336-.75.75s.336.75.75.75h3.5v3.5c0 .414.336.75.75.75s.75-.336.75-.75v-3.5h3.5c.414 0 .75-.336.75-.75s-.336-.75-.75-.75h-3.5v-3.5c0-.414-.336-.75-.75-.75s-.75.336-.75.75z" />
-                </svg>
-              </button>
-              <button
-                id="zoomOutButton"
-                class="pin-button share-button icon-button map-zoom-button"
-                type="button"
-                aria-label="Zoom out"
-                title="Zoom out"
-              >
-                <svg class="button-icon zoom-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m12.002 2.005c5.518 0 9.998 4.48 9.998 9.997 0 5.518-4.48 9.998-9.998 9.998-5.517 0-9.997-4.48-9.997-9.998 0-5.517 4.48-9.997 9.997-9.997zm0 1.5c-4.69 0-8.497 3.807-8.497 8.497s3.807 8.498 8.497 8.498 8.498-3.808 8.498-8.498-3.808-8.497-8.498-8.497zm4.253 7.75h-8.5c-.414 0-.75.336-.75.75s.336.75.75.75h8.5c.414 0 .75-.336.75-.75s-.336-.75-.75-.75z" />
-                </svg>
-              </button>
-            </div>
-            <div class="map-corner-actions">
-              <button id="fullscreenButton" class="pin-button share-button icon-button map-corner-button" type="button" aria-label="Enter full screen" title="Enter full screen">
-                <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M24 9h-2v-5h-7v-2h9v7zm-9 13v-2h7v-5h2v7h-9zm-15-7h2v5h7v2h-9v-7zm9-13v2h-7v5h-2v-7h9z" />
-                </svg>
-              </button>
-              <button id="shareButton" class="pin-button share-button icon-button map-corner-button" type="button" aria-label="Share" title="Share" aria-haspopup="menu" aria-expanded="false" aria-controls="sharePanel">
-                <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M16 15v4l8-8.035-8-7.965v4s-13.277 2.144-16 14c5.796-6.206 16-6 16-6z" />
-                </svg>
-              </button>
-              <div id="sharePanel" class="share-panel" role="menu" aria-label="Share options" hidden>
-                <div id="shareNativeRow" class="share-panel-native" hidden>
-                  <button id="nativeShareAction" class="share-panel-item share-panel-pill" type="button" role="menuitem">Share...</button>
-                </div>
-                <div class="share-panel-bar" role="none">
-                  <a id="shareXAction" class="share-panel-item share-panel-icon" href="#" target="_blank" rel="noreferrer" role="menuitem" aria-label="Share on X" title="Share on X">
-                    <img id="shareXIcon" alt="" />
-                  </a>
-                  <a id="shareFacebookAction" class="share-panel-item share-panel-icon" href="#" target="_blank" rel="noreferrer" role="menuitem" aria-label="Share on Facebook" title="Share on Facebook">
-                    <img id="shareFacebookIcon" alt="" />
-                  </a>
-                  <button id="shareInstagramAction" class="share-panel-item share-panel-icon" type="button" role="menuitem" aria-label="Prepare for Instagram" title="Prepare for Instagram">
-                    <img id="shareInstagramIcon" alt="" />
-                  </button>
-                  <a id="shareLinkedInAction" class="share-panel-item share-panel-icon" href="#" target="_blank" rel="noreferrer" role="menuitem" aria-label="Share on LinkedIn" title="Share on LinkedIn">
-                    <img id="shareLinkedInIcon" alt="" />
-                  </a>
-                  <button id="downloadImageAction" class="share-panel-item share-panel-icon" type="button" role="menuitem" aria-label="Download image" title="Download image">
-                    <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 21l-8-9h6v-12h4v12h6l-8 9zm9-1v2h-18v-2h-2v4h22v-4h-2z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div id="mapDistanceOverlay" class="map-distance-overlay" aria-live="polite" hidden>
-              <div id="mapDistanceRoute" class="map-distance-pill map-distance-pill-route" hidden></div>
-            </div>
-          </div>
-          </div><!-- /.panel-layout -->
-          <section
-            id="mobileSheet"
-            class="mobile-sheet"
-            aria-label="Mobile map controls"
-            aria-expanded="true"
-          >
-            <button
-              id="mobileSheetToggle"
-              class="mobile-sheet-toggle"
-              type="button"
-              aria-expanded="true"
-              aria-controls="mobileSheetBody"
-            >
-              <span class="mobile-sheet-handle" aria-hidden="true"></span>
-              <span class="mobile-sheet-toggle-label">Map controls</span>
-            </button>
-            <div id="mobileSheetBody" class="mobile-sheet-body">
-              <div class="mobile-sheet-head">
-                <div>
-                  <p class="mobile-sheet-eyebrow">Mobile Origin</p>
-                  <h3 id="mobileOriginTitle">Tap the map to place an origin</h3>
-                  <p id="mobileStatusText" class="mobile-status-text">
-                    Tap anywhere on the map to pin your starting point, then search, share, or
-                    adjust layers from here.
-                  </p>
-                </div>
-                <button id="mobileClearButton" class="mobile-clear-button" type="button" hidden>
-                  Clear
-                </button>
-              </div>
-              <section id="mobileRouteBuilderPanel" class="route-builder-panel mobile-nearest-route-panel" aria-live="polite">
-                <div class="route-builder-head">
-                  <h3 class="route-builder-title">Route options</h3>
-                  <div class="route-builder-actions">
-                    <button id="mobileUndoRouteBtn" class="route-builder-undo-btn" type="button" hidden>← Undo</button>
-                    <button id="mobileAddComparisonBtn" class="route-builder-add-btn" type="button" hidden>+ Compare</button>
+              <div class="quiz-od-row">
+                <div class="quiz-od-pin quiz-od-origin">
+                  <span class="quiz-od-icon">📍</span>
+                  <div>
+                    <div class="quiz-od-label">From</div>
+                    <div class="quiz-od-name" id="quizOrigin"></div>
                   </div>
                 </div>
-                <div id="mobileRouteComparisons" class="route-comparisons"></div>
-                <div id="mobileRoutePalette" class="route-palette"></div>
-              </section>
-              <div class="mobile-quick-actions">
-                <button id="mobileLocateButton" class="mobile-secondary-button" type="button">
-                  Use My Location
-                </button>
-                <button id="mobileShareButton" class="mobile-secondary-button" type="button">
-                  Share This View
-                </button>
+                <div class="quiz-od-arrow">↓</div>
+                <div class="quiz-od-pin quiz-od-dest">
+                  <span class="quiz-od-icon">🎯</span>
+                  <div>
+                    <div class="quiz-od-label">To</div>
+                    <div class="quiz-od-name" id="quizDestination"></div>
+                  </div>
+                </div>
               </div>
             </div>
-          </section>
-        </section>
-      </main>
-
-      <section class="notes">
-        <p>
-          Travel times are estimated from MTA GTFS subway trips plus short walking access to and
-          from stations. The map is transit-only for now and does not yet include bus service
-          or real-time schedules. The only ferry service included is the Staten Island Ferry.        
-        </p>
-      </section>
-
-      <footer class="footer-strip">
-        <div class="footer-links">
-          <a href="https://data.cityofnewyork.us/resource/gthc-hcne.geojson?$limit=100" target="_blank" rel="noreferrer" data-emoji-burst="nyc">NYC borough boundaries</a>
-          <a href="https://new.mta.info/developers" target="_blank" rel="noreferrer" data-emoji-burst="transit">MTA GTFS subway data</a>
-          <a href="https://www.openstreetmap.org/" target="_blank" rel="noreferrer" data-emoji-burst="maps">OpenStreetMap streets</a>
-          <a href="https://www.nycgovparks.org/about/health-and-safety-guide/open-data" target="_blank" rel="noreferrer" data-emoji-burst="parks">NYC Parks open space</a>
+          </div>
         </div>
-      </footer>
+
+        <!-- Map (right col on desktop; between top/bottom on mobile) -->
+        <div class="quiz-map-frame">
+          <canvas id="quizMapCanvas" class="quiz-map-canvas"></canvas>
+          <div class="quiz-map-controls">
+            <button class="map-control-btn" id="mapZoomIn" type="button" aria-label="Zoom in">+</button>
+            <button class="map-control-btn" id="mapZoomOut" type="button" aria-label="Zoom out">−</button>
+            <button class="map-control-btn map-control-reset" id="mapReset" type="button" aria-label="Reset view">⊙</button>
+          </div>
+        </div>
+
+        <!-- Bottom sidebar: builder + results + actions -->
+        <div class="quiz-sidebar-bottom">
+          <div id="quizAppBottom" hidden>
+            <!-- Route builder -->
+            <div class="panel-card quiz-builder-card">
+              <div class="quiz-builder-header">
+                <div class="quiz-section-label">Your route</div>
+                <div class="quiz-builder-header-right">
+                  <button class="quiz-btn quiz-btn-ghost quiz-btn-undo" id="undoBtn" type="button" disabled>Undo</button>
+                  <div class="guess-counter" id="guessCounter"></div>
+                </div>
+              </div>
+
+              <div class="quiz-route-sequence" id="quizRouteSequence"></div>
+
+              <div class="quiz-builder-actions">
+                <button class="quiz-btn quiz-btn-primary" id="submitBtn" type="button" disabled>Check</button>
+                <button class="quiz-btn quiz-btn-ghost quiz-btn-giveup" id="giveUpBtn" type="button">Give up</button>
+              </div>
+
+              <div class="route-palette quiz-palette" id="quizPalette"></div>
+            </div>
+
+            <!-- Results -->
+            <div id="quizResults" hidden></div>
+
+            <!-- Post-game actions (share + practice) -->
+            <div id="quizActionsCard" class="panel-card quiz-actions-card" hidden>
+              <button class="quiz-btn quiz-btn-share" id="shareBtn" type="button">Share results</button>
+              <a class="quiz-btn quiz-btn-next" href="/quiz">Practice →</a>
+              <p class="quiz-data-credit">Data: <a href="https://new.mta.info/developers" target="_blank" rel="noreferrer">MTA GTFS</a> · <a href="https://data.cityofnewyork.us/resource/gthc-hcne.geojson?$limit=100" target="_blank" rel="noreferrer">NYC Open Data</a> · <a href="https://www.openstreetmap.org/" target="_blank" rel="noreferrer">OSM</a></p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
     </div>
 
-    <script type="module">
-      import(window.__ASSET_BASE__ + "app.js");
-    </script>
+    <!-- Share modal -->
+    <dialog id="shareModal" class="share-modal">
+      <div class="share-modal-inner">
+        <div class="share-modal-header">
+          <h2 class="share-modal-title">Share your result</h2>
+          <button class="share-modal-close" id="shareModalClose" type="button" aria-label="Close" onclick="this.closest('dialog').close()">✕</button>
+        </div>
+        <pre id="shareModalText" class="share-modal-text"></pre>
+        <button class="quiz-btn quiz-btn-primary share-copy-btn" id="copyShareBtn" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy to clipboard
+        </button>
+      </div>
+    </dialog>
+
+    <script type="module" src="transit-guessr.js"></script>
   </body>
 </html>

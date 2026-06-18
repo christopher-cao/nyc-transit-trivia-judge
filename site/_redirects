@@ -1,1 +1,3 @@
-/nyc/*  /index.html  200
+/nyc/*              /route-calculator.html  200
+/transit-guessr     /quiz                   301
+/transit-guessr.html /quiz                  301
