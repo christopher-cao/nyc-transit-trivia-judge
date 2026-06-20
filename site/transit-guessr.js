@@ -595,11 +595,8 @@ function buildDynamicAdjacency() {
         weight - walkDistance / settingsDefaults.walkingSpeed - boardingDelta -
           settingsDefaults.transitTime - (data.meta.interComplexTransferPenalty ?? settingsDefaults.transferTime),
       );
-      const walkTime = walkDistance / settingsDefaults.walkingSpeed + walkPenalty;
-      const midpoint = [(fromPoint[0] + toPoint[0]) / 2, (fromPoint[1] + toPoint[1]) / 2];
-      if (walkTime > MAX_WALK_TO_STATION_MINUTES || classifySurface(midpoint) === "water") return null;
       return { toIndex, kind: "interchange", boardingDelta, walkDistance, walkPenalty };
-    }).filter(e => e !== null);
+    });
   });
 }
 
