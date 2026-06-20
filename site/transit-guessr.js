@@ -668,6 +668,7 @@ function runDijkstra(origin) {
         const dep = nextDeparture(edge.toIndex, absoluteArrival);
         const boardingWait = dep === Infinity ? Infinity : dep - absoluteArrival;
         weight = walkTime + settings.transferTime + boardingWait;
+        if (weight > MAX_WALK_TO_STATION_MINUTES) continue;
       } else {
         weight = edge.kind === "ride"
           ? edge.rideMinutes
@@ -847,6 +848,7 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
           boardingWait = settings.transitTime + edge.boardingDelta;
         }
         weight = walkTime + settings.transferTime + boardingWait;
+        if (weight > MAX_WALK_TO_STATION_MINUTES) continue;
         toPhase = phase + 1;
       } else {
         continue;
