@@ -2648,3 +2648,9 @@ details.quiz-rules[open] .quiz-rules-summary::before {
   color: var(--fg);
   font-weight: 600;
 }
+
+.quiz-daily-badge {
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}

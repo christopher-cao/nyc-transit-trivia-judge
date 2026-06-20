@@ -32,6 +32,8 @@ const quizState = {
   optimalResult: null,
   dayType: null,        // "Weekday" | "Saturday" | "Sunday"
   timeMinutes: null,    // minutes from midnight (e.g. 540 = 9:00am)
+  dailyMode: false,
+  dailyNumber: null,
 };
 
 // --- landmark list ---
@@ -66,6 +68,41 @@ const LANDMARKS = [
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+// --- daily puzzle helpers ---
+
+const DAILY_EPOCH_MS = Date.UTC(2026, 5, 18); // 2026-06-18 = Day 1
+
+function dateToSeed(dateStr) {
+  let h = 0;
+  for (let i = 0; i < dateStr.length; i++)
+    h = Math.imul(31, h) + dateStr.charCodeAt(i) | 0;
+  return h;
+}
+
+function seededRandom(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function getDailyPuzzle(date = new Date()) {
+  const dateStr = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+  const dayNumber = Math.floor((Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) - DAILY_EPOCH_MS) / 86400000) + 1;
+  const rand = seededRandom(dateToSeed(dateStr));
+
+  const a = Math.floor(rand() * LANDMARKS.length);
+  let b = Math.floor(rand() * (LANDMARKS.length - 1));
+  if (b >= a) b += 1;
+  const r = rand();
+  const dayType = r < 0.5 ? "Weekday" : r < 0.75 ? "Saturday" : "Sunday";
+  const timeMinutes = Math.round((360 + rand() * 900) / 5) * 5;
+
+  return { origin: LANDMARKS[a], dest: LANDMARKS[b], dayType, timeMinutes, dayNumber };
 }
 
 function distance(a, b) {
@@ -631,6 +668,7 @@ function runDijkstra(origin) {
         const dep = nextDeparture(edge.toIndex, absoluteArrival);
         const boardingWait = dep === Infinity ? Infinity : dep - absoluteArrival;
         weight = walkTime + settings.transferTime + boardingWait;
+        if (weight > MAX_WALK_TO_STATION_MINUTES) continue;
       } else {
         weight = edge.kind === "ride"
           ? edge.rideMinutes
@@ -810,6 +848,7 @@ function evaluateRouteOption(originPoint, destinationPoint, routeIds) {
           boardingWait = settings.transitTime + edge.boardingDelta;
         }
         weight = walkTime + settings.transferTime + boardingWait;
+        if (weight > MAX_WALK_TO_STATION_MINUTES) continue;
         toPhase = phase + 1;
       } else {
         continue;
@@ -937,6 +976,10 @@ function landmarkSlug(name) {
 }
 
 function setPuzzleUrl(originName, destName) {
+  if (quizState.dailyMode) {
+    history.replaceState(null, '', `${window.location.pathname}?daily`);
+    return;
+  }
   const params = new URLSearchParams({
     o: landmarkSlug(originName),
     d: landmarkSlug(destName),
@@ -948,6 +991,7 @@ function setPuzzleUrl(originName, destName) {
 
 function readPuzzleFromUrl() {
   const params = new URLSearchParams(window.location.search);
+  if (params.has('daily') || document.body.hasAttribute('data-default-daily')) return { daily: true };
   const oSlug = params.get('o'), dSlug = params.get('d');
   if (!oSlug || !dSlug) return null;
   const origin = LANDMARKS.find(l => landmarkSlug(l.name) === oSlug);
@@ -961,16 +1005,59 @@ function readPuzzleFromUrl() {
 
 const DAY_TYPES = ["Weekday", "Saturday", "Sunday"];
 
+// --- daily state persistence ---
+
+function saveDailyState() {
+  if (!quizState.dailyMode) return;
+  try {
+    localStorage.setItem(`quiz-daily-${quizState.dailyNumber}`, JSON.stringify({
+      guesses: quizState.guesses,
+      gameOver: quizState.gameOver,
+      optimalResult: quizState.optimalResult,
+      routeSequence: quizState.routeSequence,
+    }));
+  } catch (_) {}
+}
+
+function loadDailyState() {
+  if (!quizState.dailyMode) return;
+  try {
+    const raw = localStorage.getItem(`quiz-daily-${quizState.dailyNumber}`);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    quizState.guesses = saved.guesses ?? [];
+    quizState.gameOver = saved.gameOver ?? false;
+    quizState.optimalResult = saved.optimalResult ?? null;
+    quizState.routeSequence = saved.routeSequence ?? [];
+  } catch (_) {}
+}
+
 function pickNewQuestion(overrides = null) {
   let origin, dest;
-  if (overrides) {
+  if (overrides?.daily) {
+    const dp = getDailyPuzzle();
+    origin = dp.origin;
+    dest = dp.dest;
+    quizState.dayType = dp.dayType;
+    quizState.timeMinutes = dp.timeMinutes;
+    quizState.dailyMode = true;
+    quizState.dailyNumber = dp.dayNumber;
+  } else if (overrides) {
     ({ origin, dest } = overrides);
+    quizState.dayType = overrides.dayType ?? (Math.random() < 0.5 ? "Weekday" : Math.random() < 0.5 ? "Saturday" : "Sunday");
+    quizState.timeMinutes = overrides.timeMinutes ?? Math.round((360 + Math.random() * 900) / 5) * 5;
+    quizState.dailyMode = false;
+    quizState.dailyNumber = null;
   } else {
     const a = Math.floor(Math.random() * LANDMARKS.length);
     let b = Math.floor(Math.random() * (LANDMARKS.length - 1));
     if (b >= a) b += 1;
     origin = LANDMARKS[a];
     dest = LANDMARKS[b];
+    quizState.dayType = Math.random() < 0.5 ? "Weekday" : Math.random() < 0.5 ? "Saturday" : "Sunday";
+    quizState.timeMinutes = Math.round((360 + Math.random() * 900) / 5) * 5;
+    quizState.dailyMode = false;
+    quizState.dailyNumber = null;
   }
   quizState.origin = { name: origin.name, point: lonLatToWorld(origin.lon, origin.lat) };
   quizState.destination = { name: dest.name, point: lonLatToWorld(dest.lon, dest.lat) };
@@ -978,20 +1065,21 @@ function pickNewQuestion(overrides = null) {
   quizState.guesses = [];
   quizState.gameOver = false;
   quizState.optimalResult = null;
-  quizState.dayType = overrides?.dayType ?? (Math.random() < 0.5 ? "Weekday" : Math.random() < 0.5 ? "Saturday" : "Sunday");
-  quizState.timeMinutes = overrides?.timeMinutes ?? Math.round((360 + Math.random() * 900) / 5) * 5;
+  loadDailyState();
   setPuzzleUrl(origin.name, dest.name);
 }
 
 function addRoute(routeId) {
   if (quizState.gameOver) return;
   quizState.routeSequence = [...quizState.routeSequence, routeId];
+  saveDailyState();
   renderUI();
 }
 
 function undoRoute() {
   if (quizState.gameOver) return;
   quizState.routeSequence = quizState.routeSequence.slice(0, -1);
+  saveDailyState();
   renderUI();
 }
 
@@ -1023,6 +1111,7 @@ function submitAnswer() {
     quizState.gameOver = true;
   }
 
+  saveDailyState();
   renderUI();
 }
 
@@ -1039,6 +1128,7 @@ function giveUp() {
     quizState.optimalResult = traceOptimalPath(normalizedOrigin, runDijkstra(normalizedOrigin), quizState.destination.point);
   }
   quizState.gameOver = true;
+  saveDailyState();
   renderUI();
 }
 
@@ -1061,9 +1151,14 @@ function buildShareText() {
         ? `I found the optimal route (${optTime} min)!`
         : `I was ${formatMinutes(bestGuess.minutesOff)} off the best route (optimal: ${optTime} min)`)
     : `Couldn't find a viable route (optimal: ${optTime} min)`;
-  const url = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+  const header = quizState.dailyMode
+    ? `NYC Transit Guessr 🚇 · Daily #${quizState.dailyNumber}`
+    : "NYC Transit Guessr 🚇";
+  const url = quizState.dailyMode
+    ? `${window.location.origin}${window.location.pathname}?daily`
+    : `${window.location.origin}${window.location.pathname}${window.location.search}`;
   return [
-    "NYC Transit Guessr 🚇",
+    header,
     `${quizState.origin.name} → ${quizState.destination.name}`,
     "",
     `${emojiRow} (${quizState.guesses.length}/${MAX_GUESSES})`,
@@ -1105,9 +1200,12 @@ function renderQuestion() {
   document.getElementById("quizDestination").textContent = quizState.destination?.name ?? "";
   const timeEl = document.getElementById("quizPuzzleTime");
   if (timeEl) {
-    timeEl.textContent = quizState.timeMinutes !== null
+    const timePart = quizState.timeMinutes !== null
       ? `${quizState.dayType} · ${formatClock(quizState.timeMinutes)}`
       : "";
+    timeEl.innerHTML = quizState.dailyMode
+      ? `<span class="quiz-daily-badge">Daily #${quizState.dailyNumber}</span>${timePart ? ` · ${escapeHtml(timePart)}` : ""}`
+      : escapeHtml(timePart);
   }
 }
 
@@ -1267,11 +1365,11 @@ async function init() {
   pickNewQuestion(readPuzzleFromUrl());
   renderUI();
 
-  document.getElementById("shuffleBtn").addEventListener("click", nextQuestion);
+  document.getElementById("shuffleBtn")?.addEventListener("click", nextQuestion);
   document.getElementById("undoBtn").addEventListener("click", undoRoute);
   document.getElementById("submitBtn").addEventListener("click", submitAnswer);
   document.getElementById("giveUpBtn").addEventListener("click", giveUp);
-  document.getElementById("nextBtn").addEventListener("click", nextQuestion);
+  document.getElementById("nextBtn")?.addEventListener("click", nextQuestion);
   document.getElementById("shareBtn").addEventListener("click", shareResults);
   document.getElementById("copyShareBtn").addEventListener("click", copyShareText);
   document.getElementById("shareModal").addEventListener("click", (e) => {
